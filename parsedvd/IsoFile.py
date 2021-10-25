@@ -1,12 +1,15 @@
+from dataclasses import dataclass
 import json
 import atexit
 import subprocess
 import vapoursynth as vs
 from pathlib import Path
 from io import BufferedReader
+from fractions import Fraction
 from os import name as os_name
 from abc import abstractmethod
 from pyparsedvd import vts_ifo
+from functools import lru_cache
 from itertools import accumulate
 from typing import List, Union, Optional, Tuple, cast
 
@@ -15,6 +18,13 @@ from .DVDIndexers import DVDIndexer, D2VWitch
 Range = Union[Optional[int], Tuple[Optional[int], Optional[int]]]
 
 core = vs.core
+
+
+@dataclass
+class IFOInfo:
+    chapters: List[List[int]]
+    fps: Fraction
+    is_multiple_IFOs: bool
 
 
 class __IsoFile:
@@ -58,12 +68,17 @@ class __IsoFile:
                 self.indexer.index(vob_files, self.__idx_path)
             self.indexer.update_idx_file(self.__idx_path, vob_files)
 
+        ifo_info = self.get_ifo_info(self.__mount_path)
+
         self.__clip = self.indexer.vps_indexer(self.__idx_path)
+        self.__clip = self.__clip.std.AssumeFPS(fpsnum=ifo_info.fps.numerator, fpsden=ifo_info.fps.denominator)
 
         return self.__clip
 
-    def __split_chapters_clips(self, split_chapters: List[List[int]],
-                               dvd_menu_length: int) -> Tuple[List[List[int]], List[vs.VideoNode]]:
+    def __split_chapters_clips(
+        self, split_chapters: List[List[int]],
+        dvd_menu_length: int
+    ) -> Tuple[List[List[int]], List[vs.VideoNode]]:
         self.__clip = cast(vs.VideoNode, self.__clip)
         self.__idx_path = cast(Path, self.__idx_path)
 
@@ -81,18 +96,10 @@ class __IsoFile:
 
         return split_chapters, clips
 
-    def split_titles(self) -> Tuple[List[vs.VideoNode], List[List[int]], vs.VideoNode, List[int]]:
-        if self.__idx_path is None:
-            self.__idx_path = self.indexer.get_idx_file_path(self.iso_path)
-
-        if self.__mount_path is None:
-            self.__mount_path = self._get_mount_path()
-
-        if self.__clip is None:
-            self.__clip = self.source()
-
+    @lru_cache
+    def get_ifo_info(self, mount_path: Path) -> IFOInfo:
         ifo_files = [
-            f for f in sorted(self.__mount_path.glob('*.[iI][fF][oO]')) if f.stem != 'VIDEO_TS'
+            f for f in sorted(mount_path.glob('*.[iI][fF][oO]')) if f.stem != 'VIDEO_TS'
         ]
 
         program_chains = []
@@ -105,6 +112,8 @@ class __IsoFile:
                 program_chains += curr_pgci.program_chains[int(m_ifos):]
 
         split_chapters: List[List[int]] = []
+
+        fps = Fraction(30000, 1001)
 
         for prog in program_chains:
             dvd_fps_s = [pb_time.fps for pb_time in prog.playback_times]
@@ -120,9 +129,23 @@ class __IsoFile:
                 for pb_time in prog.playback_times
             ])
 
-        split_chapters = [
+        chapters = [
             list(accumulate(chapter_frames)) for chapter_frames in split_chapters
         ]
+
+        return IFOInfo(chapters, fps, m_ifos)
+
+    def split_titles(self) -> Tuple[List[vs.VideoNode], List[List[int]], vs.VideoNode, List[int]]:
+        if self.__idx_path is None:
+            self.__idx_path = self.indexer.get_idx_file_path(self.iso_path)
+
+        if self.__mount_path is None:
+            self.__mount_path = self._get_mount_path()
+
+        if self.__clip is None:
+            self.__clip = self.source()
+
+        ifo_info = self.get_ifo_info(self.__mount_path)
 
         idx_info = self.indexer.get_info(self.__idx_path, 0)
 
@@ -130,7 +153,7 @@ class __IsoFile:
 
         dvd_menu_length = len(idx_info.data) if vts_0_size > 2 << 12 else 0
 
-        self.split_chapters, self.split_clips = self.__split_chapters_clips(split_chapters, dvd_menu_length)
+        self.split_chapters, self.split_clips = self.__split_chapters_clips(ifo_info.chapters, dvd_menu_length)
 
         def __gen_joined_clip():
             split_clips = cast(List[vs.VideoNode], self.split_clips)
