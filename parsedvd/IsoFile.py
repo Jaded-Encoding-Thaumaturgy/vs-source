@@ -260,7 +260,7 @@ class __WinIsoFile(__IsoFile):
         subfolder = "VIDEO_TS"
 
         if self.iso_path.is_dir():
-            if self.iso_path.name.endswith(subfolder):
+            if self.iso_path.name.upper() == subfolder:
                 self.iso_path = self.iso_path.parent
 
             return self.iso_path / subfolder
