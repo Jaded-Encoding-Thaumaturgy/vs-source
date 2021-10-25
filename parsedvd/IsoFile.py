@@ -1,13 +1,13 @@
 import json
 import atexit
 import subprocess
-from pathlib import Path
 import vapoursynth as vs
+from pathlib import Path
 from io import BufferedReader
-from pyparsedvd import vts_ifo
 from os import name as os_name
-from itertools import accumulate
 from abc import abstractmethod
+from pyparsedvd import vts_ifo
+from itertools import accumulate
 from typing import List, Union, Optional, Tuple, cast
 
 from .DVDIndexers import DVDIndexer, D2VWitch
