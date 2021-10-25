@@ -320,7 +320,9 @@ class __LinuxIsoFile(__IsoFile):
         if self.iso_path.is_dir():
             return self._mount_folder_path()
 
-        return self.__get_mounted_disc() or self.__mount()
+        disc = self.__get_mounted_disc() or self.__mount()
+
+        return disc / "VIDEO_TS"
 
     def __get_mounted_disc(self) -> Path:
         return self.cur_mount
@@ -349,7 +351,7 @@ class __LinuxIsoFile(__IsoFile):
 
         atexit.register(self.__unmount)
 
-        return self.cur_mount / "VIDEO_TS"
+        return self.cur_mount
 
     def __unmount(self) -> bool:
         unmounted = self.__run_disc_util(self.loop_path, ["unmount", "-b", ])
