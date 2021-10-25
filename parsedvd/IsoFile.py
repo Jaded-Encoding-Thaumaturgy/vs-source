@@ -329,7 +329,7 @@ class __LinuxIsoFile(__IsoFile):
 
         return self.__get_mounted_disc() or self.__mount()
 
-    def __get_mounted_disc(self):
+    def __get_mounted_disc(self) -> Path:
         return self.cur_mount
 
     def __run_disc_util(self, path: Path, params: List[str], strip: bool = False) -> str:
@@ -339,7 +339,7 @@ class __LinuxIsoFile(__IsoFile):
 
         return output.strip() if strip else output
 
-    def __mount(self):
+    def __mount(self) -> Path:
         loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
 
         if not loop_path or "Mapped file" not in loop_path:
@@ -358,7 +358,7 @@ class __LinuxIsoFile(__IsoFile):
 
         return self.cur_mount / "VIDEO_TS"
 
-    def __unmount(self):
+    def __unmount(self) -> bool:
         unmounted = self.__run_disc_util(self.loop_path, ["unmount", "-b", ])
         if not unmounted or "Unmounted" not in unmounted:
             return False
