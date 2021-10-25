@@ -337,14 +337,11 @@ class __LinuxIsoFile(__IsoFile):
             "udisksctl", *params, str(path)
         ], capture_output=True, universal_newlines=True).stdout
 
-        if strip:
-            output = output.strip().split(" as ")[-1][:-1]
-
-        return output
+        return output.strip() if strip else output
 
     def __mount(self):
-        self.loop_path = Path(self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True))
-        cur_mount = self.__run_disc_util(self.loop_path, ["mount", "-b"], True)
+        self.loop_path = Path(self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True).split(" as ")[-1][:-1])
+        cur_mount = self.__run_disc_util(self.loop_path, ["mount", "-b"], True).split(" at ")[-1]
 
         if not cur_mount:
             raise RuntimeError("IsoFile: Couldn't mount ISO file!")
