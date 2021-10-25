@@ -257,8 +257,13 @@ class __WinIsoFile(__IsoFile):
     class_mount: bool = False
 
     def _get_mount_path(self) -> Path:
+        subfolder = "VIDEO_TS"
+
         if self.iso_path.is_dir():
-            return self.iso_path
+            if self.iso_path.name.endswith(subfolder):
+                self.iso_path = self.iso_path.parent
+
+            return self.iso_path / subfolder
 
         disc = self.__get_mounted_disc()
 
@@ -272,7 +277,7 @@ class __WinIsoFile(__IsoFile):
         if self.class_mount:
             atexit.register(self.__unmount)
 
-        return Path(fr"{disc['DriveLetter']}:\VIDEO_TS")
+        return Path(fr"{disc['DriveLetter']}:\\{subfolder}")
 
     def __run_disc_util(self, iso_path: Path, util: str) -> Optional[dict]:
         process = subprocess.Popen([
