@@ -53,6 +53,9 @@ class __IsoFile:
         if not self.__idx_path.is_file():
             self.indexer.index(vob_files, self.__idx_path)
         else:
+            if self.__idx_path.stat().st_size == 0:
+                self.__idx_path.unlink()
+                self.indexer.index(vob_files, self.__idx_path)
             self.indexer.update_idx_file(self.__idx_path, vob_files)
 
         self.__clip = self.indexer.vps_indexer(self.__idx_path)
