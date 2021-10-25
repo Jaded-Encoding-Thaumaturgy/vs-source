@@ -288,25 +288,13 @@ class __IsoFile:
 
 
 class __WinIsoFile(__IsoFile):
-    class_mount: bool = False
-
     def _get_mount_path(self) -> Path:
         if self.iso_path.is_dir():
             return self._mount_folder_path()
 
-        disc = self.__get_mounted_disc()
+        disc = self.__get_mounted_disc() or self.__mount()
 
-        if not disc:
-            self.class_mount = True
-            disc = self.__mount()
-
-        if not disc:
-            raise RuntimeError("IsoFile: Could not mount ISO file!")
-
-        if self.class_mount:
-            atexit.register(self.__unmount)
-
-        return Path(fr"{disc['DriveLetter']}:\\{self._subfolder}")
+        return disc / self._subfolder
 
     def __run_disc_util(self, iso_path: Path, util: str) -> Optional[dict]:
         process = subprocess.Popen([
@@ -317,19 +305,21 @@ class __WinIsoFile(__IsoFile):
         bjson, err = process.communicate()
 
         if err or bjson == b'' or str(bjson[:len(util)], 'utf8') == util:
-            return None
+            raise RuntimeError("IsoFile: Couldn't mount ISO file!")
+        elif util == "Dismount":
+            return Path("")
 
         bjson = json.loads(str(bjson, 'utf-8'))
 
-        del bjson['CimClass'], bjson['CimInstanceProperties'], bjson['CimSystemProperties']
-
-        return bjson
+        return Path(f"{bjson['DriveLetter']}:\\")
 
     def __get_mounted_disc(self):
         return self.__run_disc_util(self.iso_path, 'Get')
 
     def __mount(self):
-        return self.__run_disc_util(self.iso_path, 'Mount')
+        mount = self.__run_disc_util(self.iso_path, 'Mount')
+        atexit.register(self.__unmount)
+        return mount
 
     def __unmount(self):
         return self.__run_disc_util(self.iso_path, 'Dismount')
