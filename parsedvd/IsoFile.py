@@ -40,7 +40,7 @@ class __IsoFile:
             self.__mount_path = self._get_mount_path()
 
         vob_files = [
-            f for f in sorted(self.__mount_path.glob('*.vob')) if f.stem != 'VIDEO_TS'
+            f for f in sorted(self.__mount_path.glob('*.[vV][oO][bB]')) if f.stem != 'VIDEO_TS'
         ]
 
         if not len(vob_files):
@@ -87,7 +87,7 @@ class __IsoFile:
             self.__clip = self.source()
 
         ifo_files = [
-            f for f in sorted(self.__mount_path.glob('*.ifo')) if f.stem != 'VIDEO_TS'
+            f for f in sorted(self.__mount_path.glob('*.[iI][fF][oO]')) if f.stem != 'VIDEO_TS'
         ]
 
         program_chains = []
