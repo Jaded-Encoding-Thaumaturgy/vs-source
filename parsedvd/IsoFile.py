@@ -327,9 +327,29 @@ class __LinuxIsoFile(__IsoFile):
         if self.iso_path.is_dir():
             return self._mount_folder_path()
 
-        return self.__get_mounted_disc() or self.__mount()
+        disc = self.__get_mounted_disc() or self.__mount()
+
+        return disc / "VIDEO_TS"
 
     def __get_mounted_disc(self) -> Path:
+        loop_path = subprocess.run(["losetup", "-j", self.iso_path], capture_output=True, universal_newlines=True).stdout.strip().split(":")[0]
+
+        if not loop_path:
+            return self.cur_mount
+
+        self.loop_path = Path(loop_path)
+        print("ihave", loop_path)
+
+        atexit.register(self.__unmount)
+
+        device_info = subprocess.run(["udisksctl", "info", "-b", self.loop_path], capture_output=True, universal_newlines=True).stdout.strip()
+
+        if "MountPoints" in device_info:
+            cur_mount = device_info.split("MountPoints:")[1].split("\n")[0].strip()
+
+            if cur_mount:
+                self.cur_mount = Path(cur_mount)
+
         return self.cur_mount
 
     def __run_disc_util(self, path: Path, params: List[str], strip: bool = False) -> str:
@@ -340,12 +360,13 @@ class __LinuxIsoFile(__IsoFile):
         return output.strip() if strip else output
 
     def __mount(self) -> Path:
-        loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
+        if self.loop_path == Path(""):
+            loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
 
-        if not loop_path or "Mapped file" not in loop_path:
-            raise RuntimeError("IsoFile: Couldn't map the ISO file!")
+            if not loop_path or "Mapped file" not in loop_path:
+                raise RuntimeError("IsoFile: Couldn't map the ISO file!")
 
-        self.loop_path = Path(loop_path.split(" as ")[-1][:-1])
+            self.loop_path = Path(loop_path.split(" as ")[-1][:-1])
 
         cur_mount = self.__run_disc_util(self.loop_path, ["mount", "-b"], True)
 
@@ -356,13 +377,10 @@ class __LinuxIsoFile(__IsoFile):
 
         atexit.register(self.__unmount)
 
-        return self.cur_mount / "VIDEO_TS"
+        return self.cur_mount
 
     def __unmount(self) -> bool:
-        unmounted = self.__run_disc_util(self.loop_path, ["unmount", "-b", ])
-        if not unmounted or "Unmounted" not in unmounted:
-            return False
-
+        self.__run_disc_util(self.loop_path, ["unmount", "-b", ])
         return bool(self.__run_disc_util(self.loop_path, ["loop-delete", "-b", ]))
 
 
