@@ -302,9 +302,13 @@ class __WinIsoFile(__IsoFile):
 
 
 class __LinuxIsoFile(__IsoFile):
-    def __init__(self, path):
+    def _get_mount_path(self) -> Path:
+        if self.iso_path.is_dir():
+            return self.iso_path
+
         raise NotImplementedError(
-            "IsoFile: Linux filesystem not (yet) supported."
+            "IsoFile: Linux filesystem not (yet) supported on ISOs."
+            "You can load from a directory"
         )
 
 
