@@ -313,8 +313,8 @@ class __WinIsoFile(__IsoFile):
 
 
 class __LinuxIsoFile(__IsoFile):
-    loop_path: str = ""
-    cur_mount: str = ""
+    loop_path: Path = Path("")
+    cur_mount: Path = Path("")
 
     def _get_mount_path(self) -> Path:
         if self.iso_path.is_dir():
@@ -325,9 +325,6 @@ class __LinuxIsoFile(__IsoFile):
         if not disc:
             disc = self.__mount()
 
-        if not disc:
-            raise RuntimeError("IsoFile: Could not mount ISO file!")
-
         atexit.register(self.__unmount)
 
         return Path(self.cur_mount)
@@ -335,18 +332,32 @@ class __LinuxIsoFile(__IsoFile):
     def __get_mounted_disc(self):
         return self.cur_mount
 
+    def __run_disc_util(self, path: Path, params: List[str], strip: bool = False) -> str:
+        output = subprocess.run([
+            "udisksctl", *params, str(path)
+        ], capture_output=True, universal_newlines=True).stdout
+
+        if strip:
+            output = output.strip().split(" as ")[-1][:-1]
+
+        return output
+
     def __mount(self):
-        self.loop_path = subprocess.run(["udisksctl", "loop-setup", "-f", str(self.iso_path)], capture_output=True, universal_newlines=True).stdout.strip().split(" as ")[-1][:-1]
-        self.cur_mount = subprocess.run(["udisksctl", "mount", "-b", self.loop_path], capture_output=True, universal_newlines=True).stdout.strip().split(" at ")[-1]
-        if self.cur_mount:
-            self.cur_mount += "/VIDEO_TS"
-        return self.cur_mount
+        self.loop_path = Path(self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True))
+        cur_mount = self.__run_disc_util(self.loop_path, ["mount", "-b"], True)
+
+        if not cur_mount:
+            raise RuntimeError("IsoFile: Couldn't mount ISO file!")
+
+        self.cur_mount = Path(cur_mount)
+
+        return self.cur_mount / "VIDEO_TS"
 
     def __unmount(self):
-        if "Unmounted" not in subprocess.run(["udisksctl", "unmount", "-b", self.loop_path], capture_output=True, universal_newlines=True).stdout:
+        if "Unmounted" not in self.__run_disc_util(self.loop_path, ["unmount", "-b", ]):
             return False
-        subprocess.run(["udisksctl", "loop-delete", "-b", self.loop_path])
-        return True
+
+        return bool(self.__run_disc_util(self.loop_path, ["loop-delete", "-b", ]))
 
 
 IsoFile = __WinIsoFile if os_name == 'nt' else __LinuxIsoFile
