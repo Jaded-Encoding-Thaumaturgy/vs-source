@@ -12,7 +12,7 @@ You can find me in the [IEW Discord server](https://discord.gg/qxTxVJGtst), @Set
 Install `parsedvd` with the following command:
 
 ```sh
-$ pip install lvsfunc
+$ pip install parsedvd
 ```
 
 Or if you want the latest git version, install it with this command:
