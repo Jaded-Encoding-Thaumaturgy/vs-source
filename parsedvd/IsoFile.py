@@ -313,14 +313,40 @@ class __WinIsoFile(__IsoFile):
 
 
 class __LinuxIsoFile(__IsoFile):
+    loop_path: str = ""
+    cur_mount: str = ""
+
     def _get_mount_path(self) -> Path:
         if self.iso_path.is_dir():
             return self._mount_folder_path()
 
-        raise NotImplementedError(
-            "IsoFile: Linux filesystem not (yet) supported on ISOs."
-            "You can load from a directory"
-        )
+        disc = self.__get_mounted_disc()
+
+        if not disc:
+            disc = self.__mount()
+
+        if not disc:
+            raise RuntimeError("IsoFile: Could not mount ISO file!")
+
+        atexit.register(self.__unmount)
+
+        return Path(self.cur_mount)
+
+    def __get_mounted_disc(self):
+        return self.cur_mount
+
+    def __mount(self):
+        self.loop_path = subprocess.run(["udisksctl", "loop-setup", "-f", str(self.iso_path)], capture_output=True, universal_newlines=True).stdout.strip().split(" as ")[-1][:-1]
+        self.cur_mount = subprocess.run(["udisksctl", "mount", "-b", self.loop_path], capture_output=True, universal_newlines=True).stdout.strip().split(" at ")[-1]
+        if self.cur_mount:
+            self.cur_mount += "/VIDEO_TS"
+        return self.cur_mount
+
+    def __unmount(self):
+        if "Unmounted" not in subprocess.run(["udisksctl", "unmount", "-b", self.loop_path], capture_output=True, universal_newlines=True).stdout:
+            return False
+        subprocess.run(["udisksctl", "loop-delete", "-b", self.loop_path])
+        return True
 
 
 IsoFile = __WinIsoFile if os_name == 'nt' else __LinuxIsoFile
