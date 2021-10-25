@@ -6,12 +6,13 @@ import vapoursynth as vs
 from io import BufferedReader
 from pyparsedvd import vts_ifo
 from os import name as os_name
-from lvsfunc.types import Range
 from itertools import accumulate
 from abc import abstractmethod
 from typing import List, Union, Optional, Tuple, cast
 
 from .DVDIndexers import DVDIndexer, D2VWitch
+
+Range = Union[Optional[int], Tuple[Optional[int], Optional[int]]]
 
 core = vs.core
 
