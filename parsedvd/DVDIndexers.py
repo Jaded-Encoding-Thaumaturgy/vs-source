@@ -67,7 +67,7 @@ class DVDIndexer(ABC):
 
     def index(self, files: List[Path], output: Path) -> None:
         subprocess.run(
-            self.get_cmd(files, output),
+            list(map(str, self.get_cmd(files, output))),
             check=True, text=True, encoding='utf-8',
             stdout=subprocess.PIPE, cwd=files[0].parent
         )
@@ -87,7 +87,7 @@ class D2VWitch(DVDIndexer):
 
     def get_cmd(self, files: List[Path], output: Path) -> List[Any]:
         self._check_path()
-        return [str(self.path), *files, '--output', output]
+        return [self.path, *files, '--output', output]
 
     def update_idx_file(self, index_path: Path, filepaths: List[Path]):
         with open(index_path, 'r') as file:
@@ -174,13 +174,13 @@ class DGIndexNV(DVDIndexer):
 
     def get_cmd(self, files: List[Path], output: Path) -> List[Any]:
         self._check_path()
-        return [str(self.path), '-i', ','.join(map(str, files)), '-o', output, '-h']
+        return [self.path, '-i', ','.join(map(str, files)), '-o', output, '-h']
 
     def update_idx_file(self, index_path: Path, filepaths: List[Path]):
         with open(index_path, 'r') as file:
             content = file.read()
 
-        str_filepaths = [str(path) for path in filepaths]
+        str_filepaths = list(map(str, filepaths))
 
         firstsplit_idx = content.index('\n\n')
 
