@@ -18,7 +18,7 @@ core = vs.core
 
 
 class __IsoFile:
-    def __init__(self, path: Path, indexer: DVDIndexer = D2VWitch(), safe_index: bool = False):
+    def __init__(self, path: Path, indexer: DVDIndexer = D2VWitch(), safe_indices: bool = False):
         self.iso_path = Path(path)
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
             raise ValueError(
@@ -26,7 +26,7 @@ class __IsoFile:
             )
 
         self.indexer = indexer
-        self.safe_index = safe_index
+        self.safe_indices = safe_indices
         self.__idx_path = None       # type: Optional[Path]
         self.__mount_path = None     # type: Optional[Path]
         self.__clip = None           # type: Optional[vs.VideoNode]
@@ -153,7 +153,7 @@ class __IsoFile:
         self.joined_chapters = __gen_joined_chapts()
 
         if self.joined_chapters[-1] > self.__clip.num_frames:
-            if not self.safe_index:
+            if not self.safe_indices:
                 print(Warning(
                     "\n\tIsoFile: The chapters are broken, last few chapters "
                     "and negative indices will probably give out an error. "
