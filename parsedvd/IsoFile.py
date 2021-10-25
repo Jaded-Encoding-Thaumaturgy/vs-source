@@ -327,9 +327,7 @@ class __LinuxIsoFile(__IsoFile):
         if self.iso_path.is_dir():
             return self._mount_folder_path()
 
-        disc = self.__get_mounted_disc() or self.__mount()
-
-        return disc
+        return self.__get_mounted_disc() or self.__mount()
 
     def __get_mounted_disc(self):
         return self.cur_mount
