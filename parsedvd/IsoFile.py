@@ -19,7 +19,7 @@ core = vs.core
 
 class __IsoFile:
     def __init__(self, path: Path, indexer: DVDIndexer = D2VWitch(), safe_indices: bool = False):
-        self.iso_path = Path(path)
+        self.iso_path = Path(path).absolute()
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
             raise ValueError(
                 "IsoFile: path needs to point to a .ISO or a dir root of DVD"
