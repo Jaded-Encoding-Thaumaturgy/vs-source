@@ -151,12 +151,9 @@ class D2VWitch(DVDIndexer):
 
             data.append(IndexFileData(
                 info=bin(int(line[0], 16))[2:].zfill(8),
-                matrix=int(line[1]),
-                position=int(line[3]),
-                skip=int(line[4]),
-                vob=int(line[5]),
-                cell=int(line[6]),
-                pic_type='I'
+                matrix=int(line[1]), vob=int(line[5]),
+                skip=int(line[4]), cell=int(line[6]),
+                position=int(line[3]), pic_type='I'
             ))
 
         return IndexFileInfo(videos, data, file_idx)
@@ -282,13 +279,9 @@ class DGIndexNV(DVDIndexer):
                 continue
 
             data.append(IndexFileData(
-                info=None,
-                matrix=int(line[2]) + 2,
-                position=None,
-                skip=0,
-                vob=int(line[4]),
-                cell=int(line[5]),
-                pic_type=line[1]
+                info=None, matrix=int(line[2]) + 2,
+                vob=int(line[4]), cell=int(line[5]),
+                position=None, skip=0, pic_type=line[1]
             ))
 
         return IndexFileInfo(videos, data, file_idx)

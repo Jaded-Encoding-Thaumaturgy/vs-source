@@ -1,4 +1,3 @@
-from dataclasses import dataclass
 import json
 import atexit
 import subprocess
@@ -11,6 +10,7 @@ from abc import abstractmethod
 from pyparsedvd import vts_ifo
 from functools import lru_cache
 from itertools import accumulate
+from dataclasses import dataclass
 from typing import List, Union, Optional, Tuple, cast
 
 from .DVDIndexers import DVDIndexer, D2VWitch
@@ -71,13 +71,14 @@ class __IsoFile:
         ifo_info = self.get_ifo_info(self.__mount_path)
 
         self.__clip = self.indexer.vps_indexer(self.__idx_path)
-        self.__clip = self.__clip.std.AssumeFPS(fpsnum=ifo_info.fps.numerator, fpsden=ifo_info.fps.denominator)
+        self.__clip = self.__clip.std.AssumeFPS(
+            fpsnum=ifo_info.fps.numerator, fpsden=ifo_info.fps.denominator
+        )
 
         return self.__clip
 
     def __split_chapters_clips(
-        self, split_chapters: List[List[int]],
-        dvd_menu_length: int
+        self, split_chapters: List[List[int]], dvd_menu_length: int
     ) -> Tuple[List[List[int]], List[vs.VideoNode]]:
         self.__clip = cast(vs.VideoNode, self.__clip)
         self.__idx_path = cast(Path, self.__idx_path)
