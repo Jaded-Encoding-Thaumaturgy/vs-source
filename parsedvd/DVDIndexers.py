@@ -3,39 +3,16 @@ import subprocess
 from pathlib import Path
 import vapoursynth as vs
 from functools import lru_cache
-from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from typing import Any, Callable, List, Union, Optional
+
+from .dataclasses import IndexFileData, IndexFileInfo, IndexFileVideo
 
 core = vs.core
 
 # Contains portion of code from
 # https://github.com/Varde-s-Forks/lvsfunc/blob/patches/source/lvsfunc/source.py
 # Will be replaced with vardefunc's import when it's going to be available in it
-
-
-@dataclass
-class IndexFileData:
-    info: Optional[str]
-    matrix: Optional[int]
-    position: Optional[int]
-    skip: Optional[int]
-    vob: Optional[int]
-    cell: Optional[int]
-    pic_type: Optional[str]
-
-
-@dataclass
-class IndexFileVideo:
-    path: Path
-    size: int
-
-
-@dataclass
-class IndexFileInfo:
-    videos: List[IndexFileVideo]
-    data: List[IndexFileData]
-    file_idx: int
 
 
 class DVDIndexer(ABC):

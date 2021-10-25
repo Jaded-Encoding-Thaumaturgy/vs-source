@@ -10,21 +10,14 @@ from abc import abstractmethod
 from pyparsedvd import vts_ifo
 from functools import lru_cache
 from itertools import accumulate
-from dataclasses import dataclass
 from typing import List, Union, Optional, Tuple, cast
 
 from .DVDIndexers import DVDIndexer, D2VWitch
+from .dataclasses import IFOInfo
 
 Range = Union[Optional[int], Tuple[Optional[int], Optional[int]]]
 
 core = vs.core
-
-
-@dataclass
-class IFOInfo:
-    chapters: List[List[int]]
-    fps: Fraction
-    is_multiple_IFOs: bool
 
 
 class __IsoFile:
