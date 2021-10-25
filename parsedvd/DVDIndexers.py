@@ -167,8 +167,9 @@ class DGIndexNV(DVDIndexer):
 
     def __init__(
         self, path: Union[Path, str] = 'DGIndexNV',
-        vps_indexer: Callable[..., vs.VideoNode] = core.dgdecodenv.DGSource, ext: str = '.dgi'
+        vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = '.dgi'
     ) -> None:
+        vps_indexer = vps_indexer or core.dgdecodenv.DGSource
         super().__init__(path, vps_indexer, ext)
 
     def get_cmd(self, files: List[Path], output: Path) -> List[Any]:
@@ -298,8 +299,9 @@ class DGIndex(DGIndexNV):
 
     def __init__(
         self, path: Union[Path, str] = 'dgindex',
-        vps_indexer: Callable[..., vs.VideoNode] = core.d2v.Source, ext: str = '.d2v'  # type:ignore
+        vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = '.d2v'
     ) -> None:
+        vps_indexer = vps_indexer or core.d2v.Source  # type:ignore
         super().__init__(path, vps_indexer, ext)
         print(RuntimeWarning("\n\tDGIndex is bugged, it will probably not work on your system/version.\n"))
 
