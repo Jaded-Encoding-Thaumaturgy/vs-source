@@ -10,7 +10,7 @@ from abc import abstractmethod
 from pyparsedvd import vts_ifo
 from functools import lru_cache
 from itertools import accumulate
-from typing import List, Union, Optional, Tuple, cast
+from typing import List, Union, Optional, Tuple, cast, Any
 
 from .DVDIndexers import DVDIndexer, D2VWitch
 from .dataclasses import IFOInfo
@@ -323,14 +323,66 @@ class __WinIsoFile(__IsoFile):
 
 
 class __LinuxIsoFile(__IsoFile):
+    loop_path: Path = Path("")
+    cur_mount: Path = Path("")
+
     def _get_mount_path(self) -> Path:
         if self.iso_path.is_dir():
             return self._mount_folder_path()
 
-        raise NotImplementedError(
-            "IsoFile: Linux filesystem not (yet) supported on ISOs."
-            "You can load from a directory"
-        )
+        disc = self.__get_mounted_disc() or self.__mount()
+
+        return disc / "VIDEO_TS"
+
+    def __subprun(self, *args: Any) -> str:
+        return subprocess.run(list(map(str, args)), capture_output=True, universal_newlines=True).stdout
+
+    def __get_mounted_disc(self) -> Path:
+        loop_path = self.__subprun("losetup", "-j", self.iso_path).strip().split(":")[0]
+
+        if not loop_path:
+            return self.cur_mount
+
+        self.loop_path = Path(loop_path)
+
+        device_info = self.__run_disc_util(self.loop_path, ["info", "-b"], True)
+
+        if "MountPoints" in device_info:
+            cur_mount = device_info[13:].split("\n")[0].strip()
+
+            if cur_mount:
+                self.cur_mount = Path(cur_mount)
+
+        return self.cur_mount
+
+    def __run_disc_util(self, path: Path, params: List[str], strip: bool = False) -> str:
+        output = self.__subprun("udisksctl", *params, str(path))
+
+        return output.strip() if strip else output
+
+    def __mount(self) -> Path:
+        if self.loop_path == Path(""):
+            loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
+
+            if not loop_path or "Mapped file" not in loop_path:
+                raise RuntimeError("IsoFile: Couldn't map the ISO file!")
+
+            self.loop_path = Path(loop_path.split(" as ")[-1][:-1])
+
+        cur_mount = self.__run_disc_util(self.loop_path, ["mount", "-b"], True)
+
+        if not cur_mount or "Mounted" not in cur_mount:
+            raise RuntimeError("IsoFile: Couldn't mount ISO file!")
+
+        self.cur_mount = Path(cur_mount.split(" at ")[-1])
+
+        atexit.register(self.__unmount)
+
+        return self.cur_mount
+
+    def __unmount(self) -> bool:
+        self.__run_disc_util(self.loop_path, ["unmount", "-b", ])
+        return bool(self.__run_disc_util(self.loop_path, ["loop-delete", "-b", ]))
 
 
 IsoFile = __WinIsoFile if os_name == 'nt' else __LinuxIsoFile
