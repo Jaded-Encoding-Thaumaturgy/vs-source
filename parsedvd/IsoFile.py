@@ -320,14 +320,9 @@ class __LinuxIsoFile(__IsoFile):
         if self.iso_path.is_dir():
             return self._mount_folder_path()
 
-        disc = self.__get_mounted_disc()
+        disc = self.__get_mounted_disc() or self.__mount()
 
-        if not disc:
-            disc = self.__mount()
-
-        atexit.register(self.__unmount)
-
-        return Path(self.cur_mount)
+        return disc
 
     def __get_mounted_disc(self):
         return self.cur_mount
@@ -340,8 +335,6 @@ class __LinuxIsoFile(__IsoFile):
         return output.strip() if strip else output
 
     def __mount(self):
-        self.loop_path = Path(self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True).split(" as ")[-1][:-1])
-        cur_mount = self.__run_disc_util(self.loop_path, ["mount", "-b"], True).split(" at ")[-1]
         loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
 
         if not loop_path or "Mapped file" not in loop_path:
@@ -356,6 +349,7 @@ class __LinuxIsoFile(__IsoFile):
 
         self.cur_mount = Path(cur_mount.split(" at ")[-1])
 
+        atexit.register(self.__unmount)
 
         return self.cur_mount / "VIDEO_TS"
 
