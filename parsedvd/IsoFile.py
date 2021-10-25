@@ -349,16 +349,26 @@ class __LinuxIsoFile(__IsoFile):
     def __mount(self):
         self.loop_path = Path(self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True).split(" as ")[-1][:-1])
         cur_mount = self.__run_disc_util(self.loop_path, ["mount", "-b"], True).split(" at ")[-1]
+        loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
 
-        if not cur_mount:
+        if not loop_path or "Mapped file" not in loop_path:
+            raise RuntimeError("IsoFile: Couldn't map the ISO file!")
+
+        self.loop_path = Path(loop_path.split(" as ")[-1][:-1])
+
+        cur_mount = self.__run_disc_util(self.loop_path, ["mount", "-b"], True)
+
+        if not cur_mount or "Mounted" not in cur_mount:
             raise RuntimeError("IsoFile: Couldn't mount ISO file!")
 
-        self.cur_mount = Path(cur_mount)
+        self.cur_mount = Path(cur_mount.split(" at ")[-1])
+
 
         return self.cur_mount / "VIDEO_TS"
 
     def __unmount(self):
-        if "Unmounted" not in self.__run_disc_util(self.loop_path, ["unmount", "-b", ]):
+        unmounted = self.__run_disc_util(self.loop_path, ["unmount", "-b", ])
+        if not unmounted or "Unmounted" not in unmounted:
             return False
 
         return bool(self.__run_disc_util(self.loop_path, ["loop-delete", "-b", ]))
