@@ -14,7 +14,7 @@ class DGIndex(DGIndexNV):
         self, path: Union[Path, str] = 'dgindex',
         vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = '.d2v'
     ) -> None:
-        vps_indexer = vps_indexer or core.d2v.Source  # type:ignore
+        vps_indexer = vps_indexer or core.d2v.Source
         super().__init__(path, vps_indexer, ext)
         print(RuntimeWarning("\n\tDGIndex is bugged, it will probably not work on your system/version.\n"))
 

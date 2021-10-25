@@ -40,7 +40,7 @@ class __IsoFile:
         self.split_chapters = None   # type: Optional[List[List[int]]]
         self.joined_chapters = None  # type: Optional[List[int]]
 
-    def source(self):
+    def source(self) -> vs.VideoNode:
         if self.__mount_path is None:
             self.__mount_path = self._get_mount_path()
 
@@ -149,7 +149,7 @@ class __IsoFile:
 
         self.split_chapters, self.split_clips = self.__split_chapters_clips(ifo_info.chapters, dvd_menu_length)
 
-        def __gen_joined_clip():
+        def __gen_joined_clip() -> vs.VideoNode:
             split_clips = cast(List[vs.VideoNode], self.split_clips)
             joined_clip = split_clips[0]
 
@@ -159,7 +159,7 @@ class __IsoFile:
 
             return joined_clip
 
-        def __gen_joined_chapts():
+        def __gen_joined_chapts() -> List[int]:
             spl_chapts = cast(List[List[int]], self.split_chapters)
             joined_chapters = spl_chapts[0]
 
@@ -183,7 +183,7 @@ class __IsoFile:
                 ))
             else:
                 offset = 0
-                split_chapters = [[] for _ in range(len(self.split_chapters))]
+                split_chapters: List[List[int]] = [[] for _ in range(len(self.split_chapters))]
 
                 for i in range(len(self.split_chapters)):
                     for j in range(len(self.split_chapters[i])):
@@ -233,6 +233,9 @@ class __IsoFile:
             clip = cast(vs.VideoNode, self.joined_clip)
 
         rlength = len(ranges)
+
+        start: Optional[int]
+        end: Optional[int]
 
         if isinstance(chapters, int):
             start, end = ranges[0], ranges[-1]
@@ -296,14 +299,14 @@ class __WinIsoFile(__IsoFile):
             stdout=subprocess.PIPE
         )
 
-        bjson, err = process.communicate()
+        pbjson, err = process.communicate()
 
-        if err or bjson == b'' or str(bjson[:len(util)], 'utf8') == util:
+        if err or pbjson == b'' or str(pbjson[:len(util)], 'utf8') == util:
             raise RuntimeError("IsoFile: Couldn't mount ISO file!")
         elif util == "Dismount":
             return Path("")
 
-        bjson = json.loads(str(bjson, 'utf-8'))
+        bjson: dict[str, str] = json.loads(str(pbjson, 'utf-8'))
 
         return Path(f"{bjson['DriveLetter']}:\\")
 

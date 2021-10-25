@@ -23,24 +23,24 @@ class DGIndexNV(DVDIndexer):
         self._check_path()
         return [self.path, '-i', ','.join(map(str, files)), '-o', output, '-h']
 
-    def update_idx_file(self, index_path: Path, filepaths: List[Path]):
+    def update_idx_file(self, index_path: Path, filepaths: List[Path]) -> None:
         with open(index_path, 'r') as file:
-            content = file.read()
+            file_content = file.read()
 
         str_filepaths = list(map(str, filepaths))
 
-        firstsplit_idx = content.index('\n\n')
+        firstsplit_idx = file_content.index('\n\n')
 
-        if "DGIndexNV" not in content[:firstsplit_idx]:
+        if "DGIndexNV" not in file_content[:firstsplit_idx]:
             raise RuntimeError("IsoFile: Index file corrupted! Delete it and retry.")
 
-        cut_content = content[firstsplit_idx + 2:]
+        cut_content = file_content[firstsplit_idx + 2:]
 
-        firstsplit = content[:firstsplit_idx].count('\n') + 2
+        firstsplit = file_content[:firstsplit_idx].count('\n') + 2
 
         maxsplits = cut_content[:cut_content.index('\n\n')].count('\n') + firstsplit + 1
 
-        content = content.split('\n', maxsplits)
+        content = file_content.split('\n', maxsplits)
 
         if maxsplits - firstsplit != len(str_filepaths):
             raise RuntimeError("IsoFile: Index file corrupted! Delete it and retry.")
@@ -54,29 +54,27 @@ class DGIndexNV(DVDIndexer):
             f"{filepaths[i]} {splitted[i][1]}" for i in range(maxsplits - firstsplit)
         ]
 
-        content = '\n'.join(content)
+        file_content = '\n'.join(content)
 
         with open(index_path, 'w') as file:
-            file.write(content)
+            file.write(file_content)
 
     @lru_cache
     def get_info(self, index_path: Path, file_idx: int = 0) -> IndexFileInfo:
         f = index_path.open(mode="r", encoding="utf8")
 
-        content = f.read()
+        file_content = f.read()
 
-        firstsplit_idx = content.index('\n\n')
+        firstsplit_idx = file_content.index('\n\n')
 
-        if "DGIndexNV" not in content[:firstsplit_idx]:
+        if "DGIndexNV" not in file_content[:firstsplit_idx]:
             raise RuntimeError("IsoFile: Index file corrupted! Delete it and retry.")
 
-        cut_content = content[firstsplit_idx + 2:]
+        cut_content = file_content[firstsplit_idx + 2:]
 
-        firstsplit = content[:firstsplit_idx].count('\n') + 2
+        firstsplit = file_content[:firstsplit_idx].count('\n') + 2
 
         maxsplits = cut_content[:cut_content.index('\n\n')].count('\n') + firstsplit + 1
-
-        content = content.split('\n', maxsplits)
 
         f = index_path.open(mode="r", encoding="utf8")
 
@@ -108,12 +106,12 @@ class DGIndexNV(DVDIndexer):
 
         data = []
         while True:
-            line = f.readline().strip()
+            rawline = f.readline().strip()
 
-            if len(line) == 0:
+            if len(rawline) == 0:
                 break
 
-            line = line.split(" ", maxsplit=6)
+            line = rawline.split(" ", maxsplit=6)
 
             if line[0] == 'SEQ':
                 curr_SEQ = int(line[1])

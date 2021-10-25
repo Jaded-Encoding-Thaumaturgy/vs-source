@@ -1,4 +1,6 @@
-from .DVDIndexer import DVDIndexer  # noqa
-from .D2VWitch import D2VWitch      # noqa
-from .DGIndexNV import DGIndexNV    # noqa
-from .DGIndex import DGIndex        # noqa
+__all__ = ['DVDIndexer', 'D2VWitch', 'DGIndexNV', 'DGIndex']
+
+from .DVDIndexer import DVDIndexer
+from .D2VWitch import D2VWitch
+from .DGIndexNV import DGIndexNV
+from .DGIndex import DGIndex

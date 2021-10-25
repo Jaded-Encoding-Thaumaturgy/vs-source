@@ -34,7 +34,7 @@ class DVDIndexer(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def update_idx_file(self, index_path: Path, filepaths: List[Path]):
+    def update_idx_file(self, index_path: Path, filepaths: List[Path]) -> None:
         raise NotImplementedError
 
     def _check_path(self) -> None:
