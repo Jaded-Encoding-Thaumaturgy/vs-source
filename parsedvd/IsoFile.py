@@ -10,7 +10,7 @@ from abc import abstractmethod
 from pyparsedvd import vts_ifo
 from functools import lru_cache
 from itertools import accumulate
-from typing import List, Union, Optional, Tuple, cast
+from typing import List, Union, Optional, Tuple, cast, Any
 
 from .DVDIndexers import DVDIndexer, D2VWitch
 from .dataclasses import IFOInfo
@@ -331,21 +331,21 @@ class __LinuxIsoFile(__IsoFile):
 
         return disc / "VIDEO_TS"
 
+    def __subprun(self, *args: Any) -> str:
+        return subprocess.run(list(map(str, args)), capture_output=True, universal_newlines=True).stdout
+
     def __get_mounted_disc(self) -> Path:
-        loop_path = subprocess.run(["losetup", "-j", self.iso_path], capture_output=True, universal_newlines=True).stdout.strip().split(":")[0]
+        loop_path = self.__subprun("losetup", "-j", self.iso_path).strip().split(":")[0]
 
         if not loop_path:
             return self.cur_mount
 
         self.loop_path = Path(loop_path)
-        print("ihave", loop_path)
 
-        atexit.register(self.__unmount)
-
-        device_info = subprocess.run(["udisksctl", "info", "-b", self.loop_path], capture_output=True, universal_newlines=True).stdout.strip()
+        device_info = self.__run_disc_util(self.loop_path, ["info", "-b"], True)
 
         if "MountPoints" in device_info:
-            cur_mount = device_info.split("MountPoints:")[1].split("\n")[0].strip()
+            cur_mount = device_info[13:].split("\n")[0].strip()
 
             if cur_mount:
                 self.cur_mount = Path(cur_mount)
@@ -353,9 +353,7 @@ class __LinuxIsoFile(__IsoFile):
         return self.cur_mount
 
     def __run_disc_util(self, path: Path, params: List[str], strip: bool = False) -> str:
-        output = subprocess.run([
-            "udisksctl", *params, str(path)
-        ], capture_output=True, universal_newlines=True).stdout
+        output = self.__subprun("udisksctl", *params, str(path))
 
         return output.strip() if strip else output
 
