@@ -253,7 +253,7 @@ class __IsoFile:
 
         return clip
 
-    def _mount_folder_path(self) -> None:
+    def _mount_folder_path(self) -> Path:
         if self.iso_path.name.upper() == self._subfolder:
             self.iso_path = self.iso_path.parent
 
