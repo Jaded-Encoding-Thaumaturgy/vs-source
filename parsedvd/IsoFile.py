@@ -168,12 +168,9 @@ class __IsoFile:
                         if self.split_chapters[i][j] + offset < self.__clip.num_frames:
                             split_chapters[i].append(self.split_chapters[i][j])
                         else:
-                            print(self.__clip.num_frames, dvd_menu_length, len(self.split_chapters), i)
                             split_chapters[i].append(
                                 self.__clip.num_frames - dvd_menu_length - len(self.split_chapters) + i + 2
                             )
-
-                            print(i + 1, len(self.split_chapters) - 1)
 
                             for k in range(i + 1, len(self.split_chapters) - (int(dvd_menu_length > 0))):
                                 split_chapters[k] = [0, 1]
@@ -192,14 +189,8 @@ class __IsoFile:
                     dvd_menu_length
                 )
 
-                print(len(self.split_clips))
-
-                print(self.split_chapters)
-
                 self.joined_clip = __gen_joined_clip()
                 self.joined_chapters = __gen_joined_chapts()
-
-                print(self.joined_chapters)
 
         return self.split_clips, self.split_chapters, self.joined_clip, self.joined_chapters
 
