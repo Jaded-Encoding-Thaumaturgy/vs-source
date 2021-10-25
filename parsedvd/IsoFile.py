@@ -1,16 +1,19 @@
 import json
 import atexit
 import subprocess
-from pathlib import Path
 import vapoursynth as vs
+from pathlib import Path
 from io import BufferedReader
-from pyparsedvd import vts_ifo
+from fractions import Fraction
 from os import name as os_name
-from itertools import accumulate
 from abc import abstractmethod
+from pyparsedvd import vts_ifo
+from functools import lru_cache
+from itertools import accumulate
 from typing import List, Union, Optional, Tuple, cast
 
 from .DVDIndexers import DVDIndexer, D2VWitch
+from .dataclasses import IFOInfo
 
 Range = Union[Optional[int], Tuple[Optional[int], Optional[int]]]
 
@@ -58,12 +61,18 @@ class __IsoFile:
                 self.indexer.index(vob_files, self.__idx_path)
             self.indexer.update_idx_file(self.__idx_path, vob_files)
 
+        ifo_info = self.get_ifo_info(self.__mount_path)
+
         self.__clip = self.indexer.vps_indexer(self.__idx_path)
+        self.__clip = self.__clip.std.AssumeFPS(
+            fpsnum=ifo_info.fps.numerator, fpsden=ifo_info.fps.denominator
+        )
 
         return self.__clip
 
-    def __split_chapters_clips(self, split_chapters: List[List[int]],
-                               dvd_menu_length: int) -> Tuple[List[List[int]], List[vs.VideoNode]]:
+    def __split_chapters_clips(
+        self, split_chapters: List[List[int]], dvd_menu_length: int
+    ) -> Tuple[List[List[int]], List[vs.VideoNode]]:
         self.__clip = cast(vs.VideoNode, self.__clip)
         self.__idx_path = cast(Path, self.__idx_path)
 
@@ -81,18 +90,10 @@ class __IsoFile:
 
         return split_chapters, clips
 
-    def split_titles(self) -> Tuple[List[vs.VideoNode], List[List[int]], vs.VideoNode, List[int]]:
-        if self.__idx_path is None:
-            self.__idx_path = self.indexer.get_idx_file_path(self.iso_path)
-
-        if self.__mount_path is None:
-            self.__mount_path = self._get_mount_path()
-
-        if self.__clip is None:
-            self.__clip = self.source()
-
+    @lru_cache
+    def get_ifo_info(self, mount_path: Path) -> IFOInfo:
         ifo_files = [
-            f for f in sorted(self.__mount_path.glob('*.[iI][fF][oO]')) if f.stem != 'VIDEO_TS'
+            f for f in sorted(mount_path.glob('*.[iI][fF][oO]')) if f.stem != 'VIDEO_TS'
         ]
 
         program_chains = []
@@ -105,6 +106,8 @@ class __IsoFile:
                 program_chains += curr_pgci.program_chains[int(m_ifos):]
 
         split_chapters: List[List[int]] = []
+
+        fps = Fraction(30000, 1001)
 
         for prog in program_chains:
             dvd_fps_s = [pb_time.fps for pb_time in prog.playback_times]
@@ -120,9 +123,23 @@ class __IsoFile:
                 for pb_time in prog.playback_times
             ])
 
-        split_chapters = [
+        chapters = [
             list(accumulate(chapter_frames)) for chapter_frames in split_chapters
         ]
+
+        return IFOInfo(chapters, fps, m_ifos)
+
+    def split_titles(self) -> Tuple[List[vs.VideoNode], List[List[int]], vs.VideoNode, List[int]]:
+        if self.__idx_path is None:
+            self.__idx_path = self.indexer.get_idx_file_path(self.iso_path)
+
+        if self.__mount_path is None:
+            self.__mount_path = self._get_mount_path()
+
+        if self.__clip is None:
+            self.__clip = self.source()
+
+        ifo_info = self.get_ifo_info(self.__mount_path)
 
         idx_info = self.indexer.get_info(self.__idx_path, 0)
 
@@ -130,7 +147,7 @@ class __IsoFile:
 
         dvd_menu_length = len(idx_info.data) if vts_0_size > 2 << 12 else 0
 
-        self.split_chapters, self.split_clips = self.__split_chapters_clips(split_chapters, dvd_menu_length)
+        self.split_chapters, self.split_clips = self.__split_chapters_clips(ifo_info.chapters, dvd_menu_length)
 
         def __gen_joined_clip():
             split_clips = cast(List[vs.VideoNode], self.split_clips)
@@ -265,27 +282,15 @@ class __IsoFile:
 
 
 class __WinIsoFile(__IsoFile):
-    class_mount: bool = False
-
     def _get_mount_path(self) -> Path:
         if self.iso_path.is_dir():
             return self._mount_folder_path()
 
-        disc = self.__get_mounted_disc()
+        disc = self.__get_mounted_disc() or self.__mount()
 
-        if not disc:
-            self.class_mount = True
-            disc = self.__mount()
+        return disc / self._subfolder
 
-        if not disc:
-            raise RuntimeError("IsoFile: Could not mount ISO file!")
-
-        if self.class_mount:
-            atexit.register(self.__unmount)
-
-        return Path(fr"{disc['DriveLetter']}:\\{self._subfolder}")
-
-    def __run_disc_util(self, iso_path: Path, util: str) -> Optional[dict]:
+    def __run_disc_util(self, iso_path: Path, util: str) -> Path:
         process = subprocess.Popen([
             "PowerShell", fr'{util}-DiskImage -ImagePath "{str(iso_path)}" | Get-Volume | ConvertTo-Json'],
             stdout=subprocess.PIPE
@@ -294,21 +299,23 @@ class __WinIsoFile(__IsoFile):
         bjson, err = process.communicate()
 
         if err or bjson == b'' or str(bjson[:len(util)], 'utf8') == util:
-            return None
+            raise RuntimeError("IsoFile: Couldn't mount ISO file!")
+        elif util == "Dismount":
+            return Path("")
 
         bjson = json.loads(str(bjson, 'utf-8'))
 
-        del bjson['CimClass'], bjson['CimInstanceProperties'], bjson['CimSystemProperties']
+        return Path(f"{bjson['DriveLetter']}:\\")
 
-        return bjson
-
-    def __get_mounted_disc(self):
+    def __get_mounted_disc(self) -> Path:
         return self.__run_disc_util(self.iso_path, 'Get')
 
-    def __mount(self):
-        return self.__run_disc_util(self.iso_path, 'Mount')
+    def __mount(self) -> Path:
+        mount = self.__run_disc_util(self.iso_path, 'Mount')
+        atexit.register(self.__unmount)
+        return mount
 
-    def __unmount(self):
+    def __unmount(self) -> Path:
         return self.__run_disc_util(self.iso_path, 'Dismount')
 
 
@@ -325,6 +332,24 @@ class __LinuxIsoFile(__IsoFile):
         return disc / "VIDEO_TS"
 
     def __get_mounted_disc(self) -> Path:
+        loop_path = subprocess.run(["losetup", "-j", self.iso_path], capture_output=True, universal_newlines=True).stdout.strip().split(":")[0]
+
+        if not loop_path:
+            return self.cur_mount
+
+        self.loop_path = Path(loop_path)
+        print("ihave", loop_path)
+
+        atexit.register(self.__unmount)
+
+        device_info = subprocess.run(["udisksctl", "info", "-b", self.loop_path], capture_output=True, universal_newlines=True).stdout.strip()
+
+        if "MountPoints" in device_info:
+            cur_mount = device_info.split("MountPoints:")[1].split("\n")[0].strip()
+
+            if cur_mount:
+                self.cur_mount = Path(cur_mount)
+
         return self.cur_mount
 
     def __run_disc_util(self, path: Path, params: List[str], strip: bool = False) -> str:
@@ -335,12 +360,13 @@ class __LinuxIsoFile(__IsoFile):
         return output.strip() if strip else output
 
     def __mount(self) -> Path:
-        loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
+        if self.loop_path == Path(""):
+            loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
 
-        if not loop_path or "Mapped file" not in loop_path:
-            raise RuntimeError("IsoFile: Couldn't map the ISO file!")
+            if not loop_path or "Mapped file" not in loop_path:
+                raise RuntimeError("IsoFile: Couldn't map the ISO file!")
 
-        self.loop_path = Path(loop_path.split(" as ")[-1][:-1])
+            self.loop_path = Path(loop_path.split(" as ")[-1][:-1])
 
         cur_mount = self.__run_disc_util(self.loop_path, ["mount", "-b"], True)
 
@@ -354,10 +380,7 @@ class __LinuxIsoFile(__IsoFile):
         return self.cur_mount
 
     def __unmount(self) -> bool:
-        unmounted = self.__run_disc_util(self.loop_path, ["unmount", "-b", ])
-        if not unmounted or "Unmounted" not in unmounted:
-            return False
-
+        self.__run_disc_util(self.loop_path, ["unmount", "-b", ])
         return bool(self.__run_disc_util(self.loop_path, ["loop-delete", "-b", ]))
 
 
