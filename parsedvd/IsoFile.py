@@ -18,6 +18,8 @@ core = vs.core
 
 
 class __IsoFile:
+    _subfolder = "VIDEO_TS"
+
     def __init__(self, path: Path, indexer: DVDIndexer = D2VWitch(), safe_indices: bool = False):
         self.iso_path = Path(path).absolute()
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
@@ -248,6 +250,12 @@ class __IsoFile:
 
         return clip
 
+    def _mount_folder_path(self) -> None:
+        if self.iso_path.name.upper() == self._subfolder:
+            self.iso_path = self.iso_path.parent
+
+        return self.iso_path / self._subfolder
+
     @abstractmethod
     def _get_mount_path(self) -> Path:
         raise NotImplementedError()
@@ -257,13 +265,8 @@ class __WinIsoFile(__IsoFile):
     class_mount: bool = False
 
     def _get_mount_path(self) -> Path:
-        subfolder = "VIDEO_TS"
-
         if self.iso_path.is_dir():
-            if self.iso_path.name.upper() == subfolder:
-                self.iso_path = self.iso_path.parent
-
-            return self.iso_path / subfolder
+            return self._mount_folder_path()
 
         disc = self.__get_mounted_disc()
 
@@ -277,7 +280,7 @@ class __WinIsoFile(__IsoFile):
         if self.class_mount:
             atexit.register(self.__unmount)
 
-        return Path(fr"{disc['DriveLetter']}:\\{subfolder}")
+        return Path(fr"{disc['DriveLetter']}:\\{self._subfolder}")
 
     def __run_disc_util(self, iso_path: Path, util: str) -> Optional[dict]:
         process = subprocess.Popen([
@@ -309,7 +312,7 @@ class __WinIsoFile(__IsoFile):
 class __LinuxIsoFile(__IsoFile):
     def _get_mount_path(self) -> Path:
         if self.iso_path.is_dir():
-            return self.iso_path
+            return self._mount_folder_path()
 
         raise NotImplementedError(
             "IsoFile: Linux filesystem not (yet) supported on ISOs."
