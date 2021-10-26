@@ -3,6 +3,6 @@ mypy==0.910
 mypy-extensions==0.4.3
 packaging==21.0
 pycodestyle==2.7.0
-typing-extensions==3.10.0.0
+typing-extensions>=3.10.0.2
 VapourSynth>=51
 git+https://github.com/Ichunjo/vardautomation.git@63e512c#egg=vardautomation
