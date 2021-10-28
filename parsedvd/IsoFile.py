@@ -304,8 +304,10 @@ class __WinIsoFile(__IsoFile):
 
         pbjson, err = process.communicate()
 
-        if err or pbjson == b'' or str(pbjson[:len(util)], 'utf8') == util:
+        if err or str(pbjson[:len(util)], 'utf8') == util:
             raise RuntimeError("IsoFile: Couldn't mount ISO file!")
+        elif pbjson == b'':
+            return None
         elif util == "Dismount":
             return Path("")
 
