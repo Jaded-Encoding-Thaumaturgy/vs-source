@@ -294,9 +294,12 @@ class __WinIsoFile(__IsoFile):
 
         disc = self.__get_mounted_disc() or self.__mount()
 
+        if not disc:
+            raise RuntimeError("IsoFile: Couldn't mount ISO file!")
+
         return disc / self._subfolder
 
-    def __run_disc_util(self, iso_path: Path, util: str) -> Path:
+    def __run_disc_util(self, iso_path: Path, util: str) -> Optional[Path]:
         process = subprocess.Popen([
             "PowerShell", fr'{util}-DiskImage -ImagePath "{str(iso_path)}" | Get-Volume | ConvertTo-Json'],
             stdout=subprocess.PIPE
@@ -315,15 +318,16 @@ class __WinIsoFile(__IsoFile):
 
         return Path(f"{bjson['DriveLetter']}:\\")
 
-    def __get_mounted_disc(self) -> Path:
+    def __get_mounted_disc(self) -> Optional[Path]:
         return self.__run_disc_util(self.iso_path, 'Get')
 
-    def __mount(self) -> Path:
+    def __mount(self) -> Optional[Path]:
         mount = self.__run_disc_util(self.iso_path, 'Mount')
-        atexit.register(self.__unmount)
+        if mount:
+            atexit.register(self.__unmount)
         return mount
 
-    def __unmount(self) -> Path:
+    def __unmount(self) -> Optional[Path]:
         return self.__run_disc_util(self.iso_path, 'Dismount')
 
 
