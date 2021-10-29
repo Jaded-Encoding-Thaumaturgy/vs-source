@@ -10,8 +10,8 @@ from abc import abstractmethod
 from pyparsedvd import vts_ifo
 from functools import lru_cache
 from itertools import accumulate
-from vardautomation.vpathlib import VPath
-from vardautomation.config import PresetType, Preset
+# from vardautomation.vpathlib import VPath
+# from vardautomation.config import PresetType, Preset
 from typing import List, Union, Optional, Tuple, cast, Any
 
 
@@ -392,11 +392,11 @@ class __LinuxIsoFile(__IsoFile):
 
 IsoFile = __WinIsoFile if os_name == 'nt' else __LinuxIsoFile
 
-PresetDVD = Preset(
-    idx=lambda path: IsoFile(Path(path)).source(),
-    a_src=VPath('{work_filename:s}_track_{track_number:s}.wav'),
-    a_src_cut=VPath('{work_filename:s}_cut_track_{track_number:s}.wav'),
-    a_enc_cut=None,
-    chapter=None,
-    preset_type=PresetType.VIDEO
-)
+# PresetDVD = Preset(
+#     idx=lambda path: IsoFile(Path(path)).source(),
+#     a_src=VPath('{work_filename:s}_track_{track_number:s}.wav'),
+#     a_src_cut=VPath('{work_filename:s}_cut_track_{track_number:s}.wav'),
+#     a_enc_cut=None,
+#     chapter=None,
+#     preset_type=PresetType.VIDEO
+# )

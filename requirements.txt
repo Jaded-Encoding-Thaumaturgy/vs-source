@@ -1,3 +1,2 @@
 VapourSynth>=51
 pyparsedvd>=0.0.3
-git+https://github.com/Ichunjo/vardautomation.git@63e512c#egg=vardautomation
