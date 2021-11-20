@@ -92,7 +92,8 @@ class __IsoFile:
         return split_chapters, clips
 
     @lru_cache
-    def get_ifo_info(self, mount_path: Path) -> IFOInfo:
+    @staticmethod
+    def get_ifo_info(mount_path: Path) -> IFOInfo:
         ifo_files = [
             f for f in sorted(mount_path.glob('*.[iI][fF][oO]')) if f.stem != 'VIDEO_TS'
         ]
