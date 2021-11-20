@@ -29,7 +29,16 @@ class IndexFileVideo:
 
 
 @dataclass
+class IndexFileVideoInfo:
+    film: float
+    frames_coded: int
+    frames_playback: int
+    order: int
+
+
+@dataclass
 class IndexFileInfo:
     videos: List[IndexFileVideo]
     data: List[IndexFileData]
     file_idx: int
+    video_info: Optional[IndexFileVideoInfo] = None

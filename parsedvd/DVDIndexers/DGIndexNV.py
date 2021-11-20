@@ -4,7 +4,7 @@ from functools import lru_cache
 from typing import Any, Callable, List, Union, Optional
 
 from .DVDIndexer import DVDIndexer
-from ..dataclasses import IndexFileInfo, IndexFileData, IndexFileVideo
+from ..dataclasses import IndexFileInfo, IndexFileData, IndexFileVideo, IndexFileVideoInfo
 
 core = vs.core
 
@@ -134,6 +134,26 @@ class DGIndexNV(DVDIndexer):
                 position=None, skip=0, pic_type=line[1]
             ))
 
-        return IndexFileInfo(videos, data, file_idx)
         f.close()
 
+        vinfo_dict = {"film": 0.0, "frames_coded": 0, "frames_playback": 0, "order": 0}
+
+        def getfilmval(val: str) -> float:
+            return float(val.replace('%', ''))
+
+        for rlin in list(reversed(cut_content[-120:].split('\n')))[:8]:
+            values = rlin.rstrip().split(' ')
+
+            for key in vinfo_dict.keys():
+                if key.replace('frames_', '').upper() in values:
+
+                    if key == 'film':
+                        value = getfilmval(values[0]) if '%' in values[0] else getfilmval(values[1])
+                    else:
+                        value = int(values[1])
+
+                    vinfo_dict[key] = value
+
+        video_info = IndexFileVideoInfo(**vinfo_dict)  # type: ignore
+
+        return IndexFileInfo(videos, data, file_idx, video_info)
