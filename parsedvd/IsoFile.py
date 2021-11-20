@@ -10,7 +10,7 @@ from abc import abstractmethod
 from pyparsedvd import vts_ifo
 from functools import lru_cache
 from itertools import accumulate
-from typing import List, Union, Optional, Tuple, cast, Any
+from typing import List, Union, Optional, Tuple, cast, Any, Dict
 
 
 from .DVDIndexers import DVDIndexer, D2VWitch
@@ -41,7 +41,7 @@ class __IsoFile:
         self.indexer = indexer
         self.safe_indices = safe_indices
 
-    def source(self) -> vs.VideoNode:
+    def source(self, **indexer_kwargs: Dict[str, Any]) -> vs.VideoNode:
         if self.__mount_path is None:
             self.__mount_path = self._get_mount_path()
 
@@ -58,7 +58,10 @@ class __IsoFile:
 
         ifo_info = self.get_ifo_info(self.__mount_path)
 
-        self.__clip = self.indexer.vps_indexer(self.__idx_path)
+        self.__clip = self.indexer.vps_indexer(
+            self.__idx_path, **self.indexer.indexer_kwargs, **indexer_kwargs
+        )
+
         self.__clip = self.__clip.std.AssumeFPS(
             fpsnum=ifo_info.fps.numerator, fpsden=ifo_info.fps.denominator
         )
