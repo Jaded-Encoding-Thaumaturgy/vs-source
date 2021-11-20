@@ -32,7 +32,7 @@ class D2VWitch(DVDIndexer):
         firstsplit_idx = file_content.index('\n\n')
 
         if "DGIndex" not in file_content[:firstsplit_idx]:
-            raise RuntimeError("IsoFile: Index file corrupted! Delete it and retry.")
+            self.file_corrupted(index_path)
 
         maxsplits = file_content[:firstsplit_idx].count('\n') + 1
 
@@ -41,7 +41,7 @@ class D2VWitch(DVDIndexer):
         n_files = int(content[1])
 
         if not n_files or n_files != len(str_filepaths):
-            raise RuntimeError("IsoFile: Index file corrupted! Delete it and retry.")
+            self.file_corrupted(index_path)
 
         if content[2:maxsplits] == str_filepaths:
             return
@@ -62,7 +62,7 @@ class D2VWitch(DVDIndexer):
         videos = [IndexFileVideo(path, path.stat().st_size) for path in video_paths]
 
         if len(f.readline().strip()) > 0:
-            raise ValueError("IsoFile: Index file corrupted! Delete it and retry.")
+            self.file_corrupted(index_path)
 
         while True:
             if len(f.readline().strip()) == 0:

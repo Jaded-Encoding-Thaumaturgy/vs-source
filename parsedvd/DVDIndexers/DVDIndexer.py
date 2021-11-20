@@ -53,3 +53,12 @@ class DVDIndexer(ABC):
 
     def get_idx_file_path(self, path: Path) -> Path:
         return path.with_suffix(self.ext)
+
+    def file_corrupted(self, index_path: Path) -> None:
+        if self.force:
+            try:
+                index_path.unlink()
+            except OSError:
+                raise RuntimeError("IsoFile: Index file corrupted, tried to delete it and failed.")
+        else:
+            raise RuntimeError("IsoFile: Index file corrupted! Delete it and retry.")
