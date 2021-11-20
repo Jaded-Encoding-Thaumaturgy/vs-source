@@ -82,7 +82,7 @@ class DGIndexNV(DVDIndexer):
             f.readline().strip()
 
         videos = [
-            IndexFileVideo(Path(line[0]), int(line[1]))
+            IndexFileVideo(Path(' '.join(line[:-1])), int(line[-1]))
             for line in [
                 f.readline().strip().split(' ') for _ in range(maxsplits - firstsplit)
             ]
