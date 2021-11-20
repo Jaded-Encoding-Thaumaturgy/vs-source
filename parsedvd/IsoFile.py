@@ -23,6 +23,13 @@ core = vs.core
 
 class __IsoFile:
     _subfolder = "VIDEO_TS"
+    __idx_path: Optional[Path] = None
+    __mount_path: Optional[Path] = None
+    __clip: Optional[vs.VideoNode] = None
+    split_clips: Optional[List[vs.VideoNode]] = None
+    joined_clip: Optional[vs.VideoNode] = None
+    split_chapters: Optional[List[List[int]]] = None
+    joined_chapters: Optional[List[int]] = None
 
     def __init__(self, path: Path, indexer: DVDIndexer = D2VWitch(), safe_indices: bool = False):
         self.iso_path = Path(path).absolute()
@@ -33,13 +40,6 @@ class __IsoFile:
 
         self.indexer = indexer
         self.safe_indices = safe_indices
-        self.__idx_path = None       # type: Optional[Path]
-        self.__mount_path = None     # type: Optional[Path]
-        self.__clip = None           # type: Optional[vs.VideoNode]
-        self.split_clips = None      # type: Optional[List[vs.VideoNode]]
-        self.joined_clip = None      # type: Optional[vs.VideoNode]
-        self.split_chapters = None   # type: Optional[List[List[int]]]
-        self.joined_chapters = None  # type: Optional[List[int]]
 
     def source(self) -> vs.VideoNode:
         if self.__mount_path is None:
