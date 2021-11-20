@@ -31,7 +31,9 @@ class __IsoFile:
     split_chapters: Optional[List[List[int]]] = None
     joined_chapters: Optional[List[int]] = None
 
-    def __init__(self, path: Path, indexer: DVDIndexer = D2VWitch(), safe_indices: bool = False):
+    def __init__(
+        self, path: Path, indexer: DVDIndexer = D2VWitch(), safe_indices: bool = False, force_root: bool = False
+    ):
         self.iso_path = Path(path).absolute()
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
             raise ValueError(
@@ -40,6 +42,7 @@ class __IsoFile:
 
         self.indexer = indexer
         self.safe_indices = safe_indices
+        self.force_root = force_root
 
     def source(self, **indexer_kwargs: Dict[str, Any]) -> vs.VideoNode:
         if self.__mount_path is None:
@@ -290,6 +293,9 @@ class __IsoFile:
         return clip
 
     def _mount_folder_path(self) -> Path:
+        if self.force_root:
+            return self.iso_path
+
         if self.iso_path.name.upper() == self._subfolder:
             self.iso_path = self.iso_path.parent
 
