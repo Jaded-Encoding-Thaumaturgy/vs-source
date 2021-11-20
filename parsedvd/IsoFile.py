@@ -54,13 +54,7 @@ class __IsoFile:
 
         self.__idx_path = self.indexer.get_idx_file_path(self.iso_path)
 
-        if not self.__idx_path.is_file():
-            self.indexer.index(vob_files, self.__idx_path)
-        else:
-            if self.__idx_path.stat().st_size == 0:
-                self.__idx_path.unlink()
-                self.indexer.index(vob_files, self.__idx_path)
-            self.indexer.update_idx_file(self.__idx_path, vob_files)
+        self.index_files(vob_files)
 
         ifo_info = self.get_ifo_info(self.__mount_path)
 
@@ -70,6 +64,23 @@ class __IsoFile:
         )
 
         return self.__clip
+
+    def index_files(self, _files: Union[Path, List[Path]]) -> None:
+        files = [_files] if isinstance(_files, Path) else _files
+
+        if not len(files):
+            raise FileNotFoundError('IsoFile: You should pass at least one file!')
+
+        if self.__idx_path is None:
+            self.__idx_path = self.indexer.get_idx_file_path(files[0])
+
+        if not self.__idx_path.is_file():
+            self.indexer.index(files, self.__idx_path)
+        else:
+            if self.__idx_path.stat().st_size == 0:
+                self.__idx_path.unlink()
+                self.indexer.index(files, self.__idx_path)
+            self.indexer.update_idx_file(self.__idx_path, files)
 
     def __split_chapters_clips(
         self, split_chapters: List[List[int]], dvd_menu_length: int
