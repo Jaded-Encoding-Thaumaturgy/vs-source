@@ -76,6 +76,8 @@ class DGIndexNV(DVDIndexer):
 
         maxsplits = cut_content[:cut_content.index('\n\n')].count('\n') + firstsplit + 1
 
+        f.close()
+
         f = index_path.open(mode="r", encoding="utf8")
 
         for _ in range(3):
@@ -133,3 +135,5 @@ class DGIndexNV(DVDIndexer):
             ))
 
         return IndexFileInfo(videos, data, file_idx)
+        f.close()
+
