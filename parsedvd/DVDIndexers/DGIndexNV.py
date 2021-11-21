@@ -156,4 +156,4 @@ class DGIndexNV(DVDIndexer):
 
         video_info = IndexFileVideoInfo(**vinfo_dict)  # type: ignore
 
-        return IndexFileInfo(videos, data, file_idx, video_info)
+        return IndexFileInfo(index_path, videos, data, file_idx, video_info)

@@ -38,6 +38,7 @@ class IndexFileVideoInfo:
 
 @dataclass
 class IndexFileInfo:
+    path: Path
     videos: List[IndexFileVideo]
     data: List[IndexFileData]
     file_idx: int
