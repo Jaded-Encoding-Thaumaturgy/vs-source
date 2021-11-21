@@ -12,9 +12,8 @@ from functools import lru_cache
 from itertools import accumulate
 from typing import List, Union, Optional, Tuple, cast, Any, Dict
 
-
 from .DVDIndexers import DVDIndexer, D2VWitch
-from .dataclasses import IFOInfo
+from .dataclasses import IFOInfo, IndexFileInfo
 
 Range = Union[Optional[int], Tuple[Optional[int], Optional[int]]]
 
@@ -26,6 +25,7 @@ class __IsoFile:
     __idx_path: Optional[Path] = None
     __mount_path: Optional[Path] = None
     __clip: Optional[vs.VideoNode] = None
+    index_info: List[Optional[IndexFileInfo]] = [None] * 64
     split_clips: Optional[List[vs.VideoNode]] = None
     joined_clip: Optional[vs.VideoNode] = None
     split_chapters: Optional[List[List[int]]] = None
@@ -87,6 +87,20 @@ class __IsoFile:
                 self.__idx_path.unlink()
                 self.indexer.index(files, self.__idx_path)
             self.indexer.update_idx_file(self.__idx_path, files)
+
+        idx_info = self.indexer.get_info(self.__idx_path, 0)
+
+        self.index_info[0] = idx_info
+
+        if idx_info.video_info and idx_info.video_info.film == 100:
+            self.indexer.indexer_kwargs |= {'fieldop': 2}
+
+    def get_idx_info(self, index_path: Optional[Path] = None, index: int = 0) -> IndexFileInfo:
+        idx_path = index_path or self.__idx_path or self.indexer.get_idx_file_path(self.iso_path)
+
+        self.index_info[index] = self.indexer.get_info(idx_path, index)
+
+        return cast(IndexFileInfo, self.index_info[index])
 
     def __split_chapters_clips(
         self, split_chapters: List[List[int]], dvd_menu_length: int
@@ -159,7 +173,8 @@ class __IsoFile:
 
         ifo_info = self.get_ifo_info(self.__mount_path)
 
-        idx_info = self.indexer.get_info(self.__idx_path, 0)
+        idx_info = self.index_info[0] or self.indexer.get_info(self.__idx_path, 0)
+        self.index_info[0] = idx_info
 
         vts_0_size = idx_info.videos[0].size
 
