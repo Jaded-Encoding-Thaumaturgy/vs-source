@@ -113,10 +113,16 @@ class DGIndexNV(DVDIndexer):
             if len(rawline) == 0:
                 break
 
-            line = rawline.split(" ", maxsplit=6)
+            line: List[Optional[str]] = rawline.split(" ", maxsplit=6) + ([None] * 6)  # type: ignore
 
-            if line[0] == 'SEQ':
-                curr_SEQ = int(line[1])
+            name = str(line[0])
+
+            def getint(idx: int) -> Optional[int]:
+                item = line[idx]
+                return None if item is None else int(item)
+
+            if name == 'SEQ':
+                curr_SEQ = getint(1) or 0
 
             if curr_SEQ < idx_file_sector[0]:
                 continue
@@ -124,13 +130,17 @@ class DGIndexNV(DVDIndexer):
                 break
 
             try:
-                int(line[0].split(':')[0])
+                int(name.split(':')[0])
             except ValueError:
                 continue
 
+            matrix = getint(2)
+            if matrix is not None:
+                matrix += 2
+
             data.append(IndexFileData(
-                info=None, matrix=int(line[2]) + 2,
-                vob=int(line[4]), cell=int(line[5]),
+                info=None, matrix=matrix,
+                vob=getint(4), cell=getint(5),
                 position=None, skip=0, pic_type=line[1]
             ))
 
