@@ -2,7 +2,9 @@ import vapoursynth as vs
 from pathlib import Path
 from typing import Callable, List, Union, Optional
 
+
 from .DGIndexNV import DGIndexNV
+
 
 core = vs.core
 
