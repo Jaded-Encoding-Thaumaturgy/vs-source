@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 
 
 @dataclass
-class IFOFile:
+class IFOFileInfo:
     chapters: List[List[int]]
     fps: Fraction
     is_multiple_IFOs: bool
@@ -18,18 +18,23 @@ class IndexFileVideo:
 
 
 @dataclass
-class IndexFileInfo:
+class IndexFileFrameData:
+    matrix: int
+    pic_type: str
+    vob: Optional[int]
+    cell: Optional[int]
+
+
+@dataclass
+class __IndexFileInfoBase:
     path: Path
     file_idx: int
     videos: List[IndexFileVideo]
 
 
 @dataclass
-class IndexFileFrameData:
-    matrix: int
-    pic_type: str
-    vob: Optional[int]
-    cell: Optional[int]
+class IndexFileInfo(__IndexFileInfoBase):
+    frame_data: List[IndexFileFrameData]
 
 
 @dataclass
@@ -76,14 +81,14 @@ class DGIndexFooter:
 
 
 @dataclass
-class D2VIndexFileInfo(IndexFileInfo):
+class D2VIndexFileInfo(__IndexFileInfoBase):
     header: D2VIndexHeader
     frame_data: List[D2VIndexFrameData]
     footer: D2VIndexFooter
 
 
 @dataclass
-class DGIndexFileInfo(IndexFileInfo):
+class DGIndexFileInfo(__IndexFileInfoBase):
     header: DGIndexHeader
     frame_data: List[DGIndexFrameData]
     footer: DGIndexFooter
