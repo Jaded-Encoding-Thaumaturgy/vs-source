@@ -12,8 +12,8 @@ from functools import lru_cache
 from itertools import accumulate
 from typing import List, Union, Optional, Tuple, cast, Any, Dict
 
-from .DVDIndexers import DVDIndexer, D2VWitch
-from .dataclasses import DGIndexFileInfo, IFOFileInfo, IndexFileInfo
+from .DVDIndexers import D2VWitch, DGIndexNV
+from .dataclasses import D2VIndexFileInfo, DGIndexFileInfo, IFOFileInfo, IndexFileType
 
 Range = Union[Optional[int], Tuple[Optional[int], Optional[int]]]
 
@@ -25,14 +25,15 @@ class __IsoFile:
     __idx_path: Optional[Path] = None
     __mount_path: Optional[Path] = None
     __clip: Optional[vs.VideoNode] = None
-    index_info: List[Optional[IndexFileInfo]] = [None] * 64
+    index_info: List[Optional[IndexFileType]] = [None] * 64
     split_clips: Optional[List[vs.VideoNode]] = None
     joined_clip: Optional[vs.VideoNode] = None
     split_chapters: Optional[List[List[int]]] = None
     joined_chapters: Optional[List[int]] = None
 
     def __init__(
-        self, path: Path, indexer: DVDIndexer = D2VWitch(), safe_indices: bool = False, force_root: bool = False
+        self, path: Path, indexer: Union[D2VWitch, DGIndexNV] = D2VWitch(),
+        safe_indices: bool = False, force_root: bool = False
     ):
         self.iso_path = Path(path).absolute()
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
@@ -95,12 +96,14 @@ class __IsoFile:
         if isinstance(idx_dgi := cast(Any, idx_info), DGIndexFileInfo) and idx_dgi.footer.film == 100:
             self.indexer.indexer_kwargs |= {'fieldop': 2}
 
-    def get_idx_info(self, index_path: Optional[Path] = None, index: int = 0) -> IndexFileInfo:
+    def get_idx_info(
+        self, index_path: Optional[Path] = None, index: int = 0
+    ) -> Union[D2VIndexFileInfo, DGIndexFileInfo]:
         idx_path = index_path or self.__idx_path or self.indexer.get_idx_file_path(self.iso_path)
 
         self.index_info[index] = self.indexer.get_info(idx_path, index)
 
-        return cast(IndexFileInfo, self.index_info[index])
+        return cast(IndexFileType, self.index_info[index])
 
     def __split_chapters_clips(
         self, split_chapters: List[List[int]], dvd_menu_length: int

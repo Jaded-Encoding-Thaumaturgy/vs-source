@@ -1,7 +1,7 @@
 from pathlib import Path
 from fractions import Fraction
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 
 @dataclass
@@ -92,3 +92,6 @@ class DGIndexFileInfo(__IndexFileInfoBase):
     header: DGIndexHeader
     frame_data: List[DGIndexFrameData]
     footer: DGIndexFooter
+
+
+IndexFileType = Union[D2VIndexFileInfo, DGIndexFileInfo]
