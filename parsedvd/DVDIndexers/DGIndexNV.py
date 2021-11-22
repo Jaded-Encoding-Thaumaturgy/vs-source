@@ -1,6 +1,6 @@
-from fractions import Fraction
 import vapoursynth as vs
 from pathlib import Path
+from fractions import Fraction
 from functools import lru_cache, reduce as funcreduce
 from typing import Callable, List, Union, Optional, Tuple
 
@@ -82,14 +82,35 @@ class DGIndexNV(DVDIndexer):
 
         print(raw_header)
 
-        header = DGIndexHeader(
-            0, [0, 0, 0, 0, 0],
-            (1, 0),
-            [0, 0, 4480309247, 0],
-            8, Fraction(10, 11),
-            (6, 6, 6),
-            192, 4113
-        )
+        header = DGIndexHeader()
+
+        for rlin in raw_header:
+            if split_val := rlin.rstrip().split(' '):
+                key: str = split_val[0].upper()
+                values: List[str] = split_val[1:]
+            else:
+                continue
+
+            if key == 'DEVICE':
+                header.device = int(values[0])
+            elif key == 'DECODE_MODES':
+                header.decode_modes = list(map(int, values[0].split(',')))
+            elif key == 'STREAM':
+                header.stream = tuple(map(int, values))
+            elif key == 'RANGE':
+                header.ranges = list(map(int, values))
+            elif key == 'DEMUX':
+                continue
+            elif key == 'DEPTH':
+                header.depth = int(values[0])
+            elif key == 'ASPECT':
+                header.aspect = Fraction(*list(map(int, values)))
+            elif key == 'COLORIMETRY':
+                header.colorimetry = tuple(map(int, values))
+            elif key == 'PKTSIZ':
+                header.packet_size = int(values[0])
+            elif key == 'VPID':
+                header.vpid = int(values[0])
 
         videos = [
             IndexFileVideo(Path(' '.join(line[:-1])), int(line[-1]))

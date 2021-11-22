@@ -1,6 +1,6 @@
 from pathlib import Path
 from fractions import Fraction
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
 
 
@@ -56,13 +56,13 @@ class D2VIndexFooter:
 
 @dataclass
 class DGIndexHeader:
-    device: int
-    decode_modes: List[int]
-    stream: Tuple[int, int]
-    ranges: List[int]
-    depth: int
-    aspect: Fraction
-    colorimetry: Tuple[int, int, int]
+    device: int = 0
+    decode_modes: List[int] = field(default_factory=lambda: [0, 0, 0, 0, 0])
+    stream: Tuple[int, ...] = (1, 0)
+    ranges: List[int] = field(default_factory=lambda: [0, 0, 0, 0])
+    depth: int = 8
+    aspect: Fraction = Fraction(16, 9)
+    colorimetry: Tuple[int, ...] = (2, 2, 2)
     packet_size: Optional[int] = None
     vpid: Optional[int] = None
 
