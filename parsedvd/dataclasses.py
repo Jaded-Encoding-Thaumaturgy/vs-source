@@ -39,7 +39,17 @@ class IndexFileInfo(__IndexFileInfoBase):
 
 @dataclass
 class D2VIndexHeader:
-    pass
+    stream_type: int = 0
+    MPEG_type: int = 0
+    iDCT_algorithm: int = 0
+    YUVRGB_scale: int = 1
+    luminance_filter: Tuple[int, ...] = (0, 0)
+    clipping: List[int] = field(default_factory=lambda: [0, 0, 0, 0])
+    aspect: Fraction = Fraction(16, 9)
+    pic_size: str = ''
+    field_op: int = 0
+    frame_rate: Fraction = Fraction(30000, 1001)
+    location: List[int] = field(default_factory=lambda: [0, 0, 0, 0])
 
 
 @dataclass

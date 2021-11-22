@@ -1,10 +1,12 @@
+import re
 import vapoursynth as vs
 from pathlib import Path
+from fractions import Fraction
 from functools import lru_cache
 from typing import Callable, List, Union, Optional
 
 
-from ..dataclasses import D2VIndexFileInfo, D2VIndexFooter, D2VIndexFrameData, D2VIndexHeader, IndexFileVideo
+from ..dataclasses import D2VIndexFileInfo, D2VIndexFrameData, D2VIndexHeader, IndexFileVideo
 
 from .DVDIndexer import DVDIndexer
 
@@ -56,26 +58,57 @@ class D2VWitch(DVDIndexer):
 
     @lru_cache
     def get_info(self, index_path: Path, file_idx: int = 0) -> D2VIndexFileInfo:
-        f = index_path.open(mode="r", encoding="utf8")
+        with index_path.open(mode="r", encoding="utf8") as f:
+            file_content = f.read()
 
-        f.readline().strip()
-        video_paths = [Path(f.readline().strip()) for _ in range(int(f.readline().strip()))]
-        videos = [IndexFileVideo(path, path.stat().st_size) for path in video_paths]
+        lines = file_content.split('\n')
 
-        header = D2VIndexHeader()
-        footer = D2VIndexFooter()
+        head, lines = lines[:3], lines[3:]
 
-        if len(f.readline().strip()) > 0:
+        if "DGIndex" not in head[0]:
             self.file_corrupted(index_path)
 
-        while True:
-            if len(f.readline().strip()) == 0:
-                break
+        vid_lines, lines = self._split_lines(lines)
+        raw_header, lines = self._split_lines(lines)
+
+        videos = [IndexFileVideo(path, path.stat().st_size) for path in map(Path, vid_lines)]
+
+        header = D2VIndexHeader()
+
+        for rlin in raw_header:
+            if split_val := rlin.rstrip().split('='):
+                key: str = split_val[0].upper()
+                values: List[str] = ','.join(split_val[1:]).split(',')
+            else:
+                continue
+
+            if key == 'STREAM_TYPE':
+                header.stream_type = int(values[0])
+            elif key == 'MPEG_TYPE':
+                header.MPEG_type = int(values[0])
+            elif key == 'IDCT_ALGORITHM':
+                header.iDCT_algorithm = int(values[0])
+            elif key == 'YUVRGB_SCALE':
+                header.YUVRGB_scale = int(values[0])
+            elif key == 'LUMINANCE_FILTER':
+                header.luminance_filter = tuple(map(int, values))
+            elif key == 'CLIPPING':
+                header.clipping = list(map(int, values))
+            elif key == 'ASPECT_RATIO':
+                header.aspect = Fraction(*list(map(int, values[0].split(':'))))
+            elif key == 'PICTURE_SIZE':
+                header.pic_size = str(values[0])
+            elif key == 'FIELD_OPERATION':
+                header.field_op = int(values[0])
+            elif key == 'FRAME_RATE':
+                if matches := re.search(r".*\((\d+\/\d+)", values[0]):
+                    header.frame_rate = Fraction(matches.group(1))
+            elif key == 'LOCATION':
+                header.location = list(map(int, values))
 
         frame_data = []
 
-        while True:
-            rawline = f.readline().strip()
+        for rawline in lines:
             if len(rawline) == 0:
                 break
 
@@ -89,10 +122,9 @@ class D2VWitch(DVDIndexer):
                 break
 
             frame_data.append(D2VIndexFrameData(
-                info=bin(int(line[0], 16))[2:].zfill(8),
-                matrix=int(line[1]), vob=int(line[5]),
-                skip=int(line[4]), cell=int(line[6]),
-                position=int(line[3]), pic_type='I'
+                int(line[1]), 'I', int(line[5]),
+                int(line[6]), bin(int(line[0], 16))[2:].zfill(8),
+                int(line[4]), int(line[3])
             ))
 
         return D2VIndexFileInfo(index_path, file_idx, videos, header, frame_data)
