@@ -62,8 +62,8 @@ class DGIndexNV(DVDIndexer):
 
         file_content = '\n'.join(content)
 
-        # with open(index_path, 'w') as file:
-        #     file.write(file_content)
+        with open(index_path, 'w') as file:
+            file.write(file_content)
 
     @lru_cache
     def get_info(self, index_path: Path, file_idx: int = 0) -> DGIndexFileInfo:
@@ -72,15 +72,13 @@ class DGIndexNV(DVDIndexer):
 
         lines = file_content.split('\n')
 
-        head, lines = self.__split_lines(lines)
+        head, lines = self._split_lines(lines)
 
         if "DGIndexNV" not in head[0]:
             self.file_corrupted(index_path)
 
         vid_lines, lines = self._split_lines(lines)
         raw_header, lines = self._split_lines(lines)
-
-        print(raw_header)
 
         header = DGIndexHeader()
 
