@@ -1,10 +1,18 @@
+from fractions import Fraction
 import vapoursynth as vs
 from pathlib import Path
 from functools import lru_cache, reduce as funcreduce
-from typing import Callable, List, Union, Optional, Tuple
+from typing import Callable, List, Union, Optional, Tuple, Sequence
+
+
+from ..dataclasses import (
+    DGIndexFileInfo, DGIndexFooter,
+    DGIndexHeader, DGIndexFrameData, IndexFileVideo
+)
 
 from .DVDIndexer import DVDIndexer
-from ..dataclasses import IndexFileInfo, IndexFileData, IndexFileVideo, IndexFileVideoInfo
+from .utils import opt_int, opt_ints
+
 
 core = vs.core
 
@@ -58,7 +66,7 @@ class DGIndexNV(DVDIndexer):
         #     file.write(file_content)
 
     @lru_cache
-    def get_info(self, index_path: Path, file_idx: int = 0) -> IndexFileInfo:
+    def get_info(self, index_path: Path, file_idx: int = 0) -> DGIndexFileInfo:
         with index_path.open(mode="r", encoding="utf8") as f:
             file_content = f.read()
 
@@ -70,7 +78,18 @@ class DGIndexNV(DVDIndexer):
             self.file_corrupted(index_path)
 
         vid_lines, lines = self.__split_lines(lines)
-        _________, lines = self.__split_lines(lines)
+        raw_header, lines = self.__split_lines(lines)
+
+        print(raw_header)
+
+        header = DGIndexHeader(
+            0, [0, 0, 0, 0, 0],
+            (1, 0),
+            [0, 0, 4480309247, 0],
+            8, Fraction(10, 11),
+            (6, 6, 6),
+            192, 4113
+        )
 
         videos = [
             IndexFileVideo(Path(' '.join(line[:-1])), int(line[-1]))
@@ -81,22 +100,18 @@ class DGIndexNV(DVDIndexer):
 
         idx_file_sector = [max_sector - videos[file_idx].size, max_sector]
 
-        curr_SEQ, data = 0, []
+        curr_SEQ, frame_data = 0, []
 
         for rawline in lines:
             if len(rawline) == 0:
                 break
 
-            line: List[Optional[str]] = rawline.split(" ", maxsplit=6) + ([None] * 6)  # type: ignore
+            line: Sequence[Optional[str]] = rawline.split(" ", maxsplit=6) + ([None] * 6)  # type: ignore
 
             name = str(line[0])
 
-            def getint(idx: int) -> Optional[int]:
-                item = line[idx]
-                return None if item is None else int(item)
-
             if name == 'SEQ':
-                curr_SEQ = getint(1) or 0
+                curr_SEQ = opt_int(line[1]) or 0
 
             if curr_SEQ < idx_file_sector[0]:
                 continue
@@ -108,20 +123,11 @@ class DGIndexNV(DVDIndexer):
             except ValueError:
                 continue
 
-            matrix = getint(2)
+            frame_data.append(DGIndexFrameData(
+                int(line[2] or 0) + 2, str(line[1]), *opt_ints(line[4:6])
+            ))
 
-            if matrix is not None:
-                matrix += 2
-
-            data.append(
-                IndexFileData(
-                    info=None, matrix=matrix,
-                    vob=getint(4), cell=getint(5),
-                    position=None, skip=0, pic_type=line[1]
-                )
-            )
-
-        vinfo = IndexFileVideoInfo()
+        footer = DGIndexFooter()
 
         for rlin in lines[-10:]:
             if split_val := rlin.rstrip().split(' '):
@@ -129,25 +135,21 @@ class DGIndexNV(DVDIndexer):
             else:
                 continue
 
-            for key in vinfo.__dict__.keys():
+            for key in footer.__dict__.keys():
                 if key.split('_')[-1].upper() in values:
                     if key == 'film':
                         try:
-                            value = [self.__getfilmval(v) for v in values if '%' in v][0]
+                            value = [float(v.replace('%', '')) for v in values if '%' in v][0]
                         except IndexError:
                             value = 0
                     else:
                         value = int(values[1])
 
-                    vinfo.__setattr__(key, value)
+                    footer.__setattr__(key, value)
 
-        return IndexFileInfo(index_path, videos, data, file_idx, vinfo)
+        return DGIndexFileInfo(index_path, file_idx, videos, header, frame_data, footer)
 
     @staticmethod
     def __split_lines(buff: List[str]) -> Tuple[List[str], List[str]]:
         split_idx = buff.index('')
         return buff[:split_idx], buff[split_idx + 1:]
-
-    @staticmethod
-    def __getfilmval(val: str) -> float:
-        return float(val.replace('%', ''))
