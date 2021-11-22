@@ -30,31 +30,25 @@ class D2VWitch(DVDIndexer):
         with open(index_path, 'r') as file:
             file_content = file.read()
 
-        str_filepaths = [str(path) for path in filepaths]
+        lines = file_content.split('\n')
 
-        firstsplit_idx = file_content.index('\n\n')
+        str_filepaths = list(map(str, filepaths))
 
-        if "DGIndex" not in file_content[:firstsplit_idx]:
+        if "DGIndex" not in lines[0]:
             self.file_corrupted(index_path)
 
-        maxsplits = file_content[:firstsplit_idx].count('\n') + 1
-
-        content = file_content.split('\n', maxsplits)
-
-        n_files = int(content[1])
-
-        if not n_files or n_files != len(str_filepaths):
+        if not (n_files := int(lines[1])) or n_files != len(str_filepaths):
             self.file_corrupted(index_path)
 
-        if content[2:maxsplits] == str_filepaths:
+        end_videos = lines.index('')
+
+        if lines[2:end_videos] == str_filepaths:
             return
 
-        content[2:maxsplits] = str_filepaths
-
-        file_content = '\n'.join(content)
+        lines[2:end_videos] = str_filepaths
 
         with open(index_path, 'w') as file:
-            file.write(file_content)
+            file.write('\n'.join(lines))
 
     @lru_cache
     def get_info(self, index_path: Path, file_idx: int = 0) -> D2VIndexFileInfo:

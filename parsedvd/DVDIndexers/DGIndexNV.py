@@ -33,37 +33,34 @@ class DGIndexNV(DVDIndexer):
         with open(index_path, 'r') as file:
             file_content = file.read()
 
+        lines = file_content.split('\n')
+
         str_filepaths = list(map(str, filepaths))
 
-        firstsplit_idx = file_content.index('\n\n')
-
-        if "DGIndexNV" not in file_content[:firstsplit_idx]:
+        if "DGIndexNV" not in lines[0]:
             self.file_corrupted(index_path)
 
-        cut_content = file_content[firstsplit_idx + 2:]
+        start_videos = lines.index('') + 1
+        end_videos = lines.index('', start_videos)
 
-        firstsplit = file_content[:firstsplit_idx].count('\n') + 2
-
-        maxsplits = cut_content[:cut_content.index('\n\n')].count('\n') + firstsplit + 1
-
-        content = file_content.split('\n', maxsplits)
-
-        if maxsplits - firstsplit != len(str_filepaths):
+        if (n_files := end_videos - start_videos) != len(str_filepaths):
             self.file_corrupted(index_path)
 
-        splitted = [content[i].split(' ') for i in range(firstsplit, maxsplits)]
-
-        if [split[0] for split in splitted] == str_filepaths:
-            return
-
-        content[firstsplit:maxsplits] = [
-            f"{filepaths[i]} {splitted[i][1]}" for i in range(maxsplits - firstsplit)
+        split_videos = [
+            [line[:-1], ' '.join(line[-1])] for line in [
+                line.split(' ') for line in lines[start_videos:end_videos]
+            ]
         ]
 
-        file_content = '\n'.join(content)
+        if [s[0] for s in split_videos] == str_filepaths:
+            return
+
+        lines[start_videos:end_videos] = [
+            f"{filepaths[i]} {split_videos[i][1]}" for i in range(n_files)
+        ]
 
         with open(index_path, 'w') as file:
-            file.write(file_content)
+            file.write('\n'.join(lines))
 
     @lru_cache
     def get_info(self, index_path: Path, file_idx: int = 0) -> DGIndexFileInfo:
