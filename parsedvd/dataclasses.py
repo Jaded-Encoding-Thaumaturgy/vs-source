@@ -50,11 +50,6 @@ class D2VIndexFrameData(IndexFileFrameData):
 
 
 @dataclass
-class D2VIndexFooter:
-    pass
-
-
-@dataclass
 class DGIndexHeader:
     device: int = 0
     decode_modes: List[int] = field(default_factory=lambda: [0, 0, 0, 0, 0])
@@ -84,7 +79,6 @@ class DGIndexFooter:
 class D2VIndexFileInfo(__IndexFileInfoBase):
     header: D2VIndexHeader
     frame_data: List[D2VIndexFrameData]
-    footer: D2VIndexFooter
 
 
 @dataclass

@@ -95,4 +95,4 @@ class D2VWitch(DVDIndexer):
                 position=int(line[3]), pic_type='I'
             ))
 
-        return D2VIndexFileInfo(index_path, file_idx, videos, header, frame_data, footer)
+        return D2VIndexFileInfo(index_path, file_idx, videos, header, frame_data)
