@@ -347,7 +347,7 @@ class __WinIsoFile(__IsoFile):
             raise RuntimeError("IsoFile: Couldn't mount ISO file!")
         elif pbjson == b'':
             return None
-        elif util == "Dismount":
+        elif util.lower() == "dismount":
             return Path("")
 
         bjson: dict[str, str] = json.loads(str(pbjson, 'utf-8'))
@@ -368,8 +368,8 @@ class __WinIsoFile(__IsoFile):
 
 
 class __LinuxIsoFile(__IsoFile):
-    loop_path: Path = Path("")
-    cur_mount: Path = Path("")
+    loop_path: Path
+    cur_mount: Path
 
     def _get_mount_path(self) -> Path:
         if self.iso_path.is_dir():
@@ -377,7 +377,7 @@ class __LinuxIsoFile(__IsoFile):
 
         disc = self.__get_mounted_disc() or self.__mount()
 
-        return disc / "VIDEO_TS"
+        return disc / self._subfolder
 
     def __subprun(self, *args: Any) -> str:
         return subprocess.run(list(map(str, args)), capture_output=True, universal_newlines=True).stdout
@@ -392,7 +392,7 @@ class __LinuxIsoFile(__IsoFile):
 
         device_info = self.__run_disc_util(self.loop_path, ["info", "-b"], True)
 
-        if "MountPoints" in device_info:
+        if "mountpoints" in device_info.lower():
             cur_mount = device_info[13:].split("\n")[0].strip()
 
             if cur_mount:
@@ -409,14 +409,14 @@ class __LinuxIsoFile(__IsoFile):
         if self.loop_path == Path(""):
             loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
 
-            if not loop_path or "Mapped file" not in loop_path:
+            if "mapped file" not in loop_path.lower():
                 raise RuntimeError("IsoFile: Couldn't map the ISO file!")
 
             self.loop_path = Path(loop_path.split(" as ")[-1][:-1])
 
         cur_mount = self.__run_disc_util(self.loop_path, ["mount", "-b"], True)
 
-        if not cur_mount or "Mounted" not in cur_mount:
+        if "mounted" not in cur_mount.lower():
             raise RuntimeError("IsoFile: Couldn't mount ISO file!")
 
         self.cur_mount = Path(cur_mount.split(" at ")[-1])
