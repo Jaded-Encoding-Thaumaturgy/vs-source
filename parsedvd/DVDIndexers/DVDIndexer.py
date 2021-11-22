@@ -1,17 +1,13 @@
 import shutil
 import subprocess
-from pathlib import Path
 import vapoursynth as vs
+from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import Any, Callable, List, Union
 
 from ..dataclasses import IndexFileInfo
 
 core = vs.core
-
-# Contains portion of code from
-# https://github.com/Varde-s-Forks/lvsfunc/blob/patches/source/lvsfunc/source.py
-# Will be replaced with vardefunc's import when it's going to be available in it
 
 
 class DVDIndexer(ABC):
@@ -29,7 +25,7 @@ class DVDIndexer(ABC):
         super().__init__()
 
     @abstractmethod
-    def get_cmd(self, files: List[Path], output: Path) -> List[Any]:
+    def get_cmd(self, files: List[Path], output: Path) -> List[str]:
         """Returns the indexer command"""
         raise NotImplementedError
 
@@ -42,9 +38,10 @@ class DVDIndexer(ABC):
     def update_idx_file(self, index_path: Path, filepaths: List[Path]) -> None:
         raise NotImplementedError
 
-    def _check_path(self) -> None:
+    def _check_path(self) -> Path:
         if not shutil.which(str(self.path)):
             raise FileNotFoundError(f'DVDIndexer: `{self.path}` was not found!')
+        return self.path
 
     def index(self, files: List[Path], output: Path) -> None:
         subprocess.run(

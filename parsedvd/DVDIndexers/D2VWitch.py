@@ -1,7 +1,7 @@
-from pathlib import Path
 import vapoursynth as vs
+from pathlib import Path
 from functools import lru_cache
-from typing import Any, Callable, List, Union, Optional
+from typing import Callable, List, Union, Optional
 
 from .DVDIndexer import DVDIndexer
 from ..dataclasses import IndexFileInfo, IndexFileData, IndexFileVideo
@@ -16,12 +16,10 @@ class D2VWitch(DVDIndexer):
         self, path: Union[Path, str] = 'd2vwitch',
         vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = '.d2v'
     ) -> None:
-        vps_indexer = vps_indexer or core.d2v.Source
-        super().__init__(path, vps_indexer, ext)
+        super().__init__(path, vps_indexer or core.d2v.Source, ext)
 
-    def get_cmd(self, files: List[Path], output: Path) -> List[Any]:
-        self._check_path()
-        return [self.path, *files, '--output', output]
+    def get_cmd(self, files: List[Path], output: Path) -> List[str]:
+        return list(map(str, [self._check_path(), *files, '--output', output]))
 
     def update_idx_file(self, index_path: Path, filepaths: List[Path]) -> None:
         with open(index_path, 'r') as file:
