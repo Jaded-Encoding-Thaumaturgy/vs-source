@@ -1,8 +1,8 @@
 import vapoursynth as vs
 from pathlib import Path
 from fractions import Fraction
+from typing import Callable, List, Union, Optional
 from functools import lru_cache, reduce as funcreduce
-from typing import Callable, List, Union, Optional, Tuple
 
 
 from ..dataclasses import (
@@ -77,8 +77,8 @@ class DGIndexNV(DVDIndexer):
         if "DGIndexNV" not in head[0]:
             self.file_corrupted(index_path)
 
-        vid_lines, lines = self.__split_lines(lines)
-        raw_header, lines = self.__split_lines(lines)
+        vid_lines, lines = self._split_lines(lines)
+        raw_header, lines = self._split_lines(lines)
 
         print(raw_header)
 
@@ -169,8 +169,3 @@ class DGIndexNV(DVDIndexer):
                     footer.__setattr__(key, value)
 
         return DGIndexFileInfo(index_path, file_idx, videos, header, frame_data, footer)
-
-    @staticmethod
-    def __split_lines(buff: List[str]) -> Tuple[List[str], List[str]]:
-        split_idx = buff.index('')
-        return buff[:split_idx], buff[split_idx + 1:]

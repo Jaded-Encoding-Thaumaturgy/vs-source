@@ -3,7 +3,7 @@ import subprocess
 import vapoursynth as vs
 from pathlib import Path
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Union
+from typing import Any, Callable, List, Union, Tuple
 
 
 from ..dataclasses import IndexFileType
@@ -63,3 +63,8 @@ class DVDIndexer(ABC):
                 raise RuntimeError("IsoFile: Index file corrupted, tried to delete it and failed.")
         else:
             raise RuntimeError("IsoFile: Index file corrupted! Delete it and retry.")
+
+    @staticmethod
+    def _split_lines(buff: List[str]) -> Tuple[List[str], List[str]]:
+        split_idx = buff.index('')
+        return buff[:split_idx], buff[split_idx + 1:]
