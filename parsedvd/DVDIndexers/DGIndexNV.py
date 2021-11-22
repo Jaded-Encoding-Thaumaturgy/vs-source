@@ -47,7 +47,7 @@ class DGIndexNV(DVDIndexer):
             self.file_corrupted(index_path)
 
         split_videos = [
-            [line[:-1], ' '.join(line[-1])] for line in [
+            [line[:-1], ' '.join(line[-1:])] for line in [
                 line.split(' ') for line in lines[start_videos:end_videos]
             ]
         ]
