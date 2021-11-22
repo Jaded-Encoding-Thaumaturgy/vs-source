@@ -3,8 +3,11 @@ from pathlib import Path
 from functools import lru_cache
 from typing import Callable, List, Union, Optional
 
+
+from ..dataclasses import D2VIndexFileInfo, D2VIndexFooter, D2VIndexFrameData, D2VIndexHeader, IndexFileVideo
+
 from .DVDIndexer import DVDIndexer
-from ..dataclasses import IndexFileInfo, IndexFileData, IndexFileVideo
+
 
 core = vs.core
 
@@ -52,12 +55,15 @@ class D2VWitch(DVDIndexer):
             file.write(file_content)
 
     @lru_cache
-    def get_info(self, index_path: Path, file_idx: int = 0) -> IndexFileInfo:
+    def get_info(self, index_path: Path, file_idx: int = 0) -> D2VIndexFileInfo:
         f = index_path.open(mode="r", encoding="utf8")
 
         f.readline().strip()
         video_paths = [Path(f.readline().strip()) for _ in range(int(f.readline().strip()))]
         videos = [IndexFileVideo(path, path.stat().st_size) for path in video_paths]
+
+        header = D2VIndexHeader()
+        footer = D2VIndexFooter()
 
         if len(f.readline().strip()) > 0:
             self.file_corrupted(index_path)
@@ -66,7 +72,8 @@ class D2VWitch(DVDIndexer):
             if len(f.readline().strip()) == 0:
                 break
 
-        data = []
+        frame_data = []
+
         while True:
             rawline = f.readline().strip()
             if len(rawline) == 0:
@@ -81,11 +88,11 @@ class D2VWitch(DVDIndexer):
             elif ffile_idx > file_idx:
                 break
 
-            data.append(IndexFileData(
+            frame_data.append(D2VIndexFrameData(
                 info=bin(int(line[0], 16))[2:].zfill(8),
                 matrix=int(line[1]), vob=int(line[5]),
                 skip=int(line[4]), cell=int(line[6]),
                 position=int(line[3]), pic_type='I'
             ))
 
-        return IndexFileInfo(index_path, videos, data, file_idx)
+        return D2VIndexFileInfo(index_path, file_idx, videos, header, frame_data, footer)

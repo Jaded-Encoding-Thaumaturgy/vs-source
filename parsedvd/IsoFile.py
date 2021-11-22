@@ -4,16 +4,16 @@ import subprocess
 import vapoursynth as vs
 from pathlib import Path
 from io import BufferedReader
-from fractions import Fraction
 from os import name as os_name
 from abc import abstractmethod
+from fractions import Fraction
 from pyparsedvd import vts_ifo
 from functools import lru_cache
 from itertools import accumulate
 from typing import List, Union, Optional, Tuple, cast, Any, Dict
 
 from .DVDIndexers import DVDIndexer, D2VWitch
-from .dataclasses import IFOInfo, IndexFileInfo
+from .dataclasses import DGIndexFileInfo, IFOFileInfo, IndexFileInfo
 
 Range = Union[Optional[int], Tuple[Optional[int], Optional[int]]]
 
@@ -92,7 +92,7 @@ class __IsoFile:
 
         self.index_info[0] = idx_info
 
-        if idx_info.video_info and idx_info.video_info.film == 100:
+        if isinstance(idx_dgi := cast(Any, idx_info), DGIndexFileInfo) and idx_dgi.footer.film == 100:
             self.indexer.indexer_kwargs |= {'fieldop': 2}
 
     def get_idx_info(self, index_path: Optional[Path] = None, index: int = 0) -> IndexFileInfo:
@@ -123,7 +123,7 @@ class __IsoFile:
         return split_chapters, clips
 
     @lru_cache
-    def get_ifo_info(self, mount_path: Path) -> IFOInfo:
+    def get_ifo_info(self, mount_path: Path) -> IFOFileInfo:
         ifo_files = [
             f for f in sorted(mount_path.glob('*.[iI][fF][oO]')) if f.stem != 'VIDEO_TS'
         ]
@@ -159,7 +159,7 @@ class __IsoFile:
             list(accumulate(chapter_frames)) for chapter_frames in split_chapters
         ]
 
-        return IFOInfo(chapters, fps, m_ifos)
+        return IFOFileInfo(chapters, fps, m_ifos)
 
     def split_titles(self) -> Tuple[List[vs.VideoNode], List[List[int]], vs.VideoNode, List[int]]:
         if self.__idx_path is None:
@@ -178,7 +178,7 @@ class __IsoFile:
 
         vts_0_size = idx_info.videos[0].size
 
-        dvd_menu_length = len(idx_info.data) if vts_0_size > 2 << 12 else 0
+        dvd_menu_length = len(idx_info.frame_data) if vts_0_size > 2 << 12 else 0
 
         self.split_chapters, self.split_clips = self.__split_chapters_clips(ifo_info.chapters, dvd_menu_length)
 

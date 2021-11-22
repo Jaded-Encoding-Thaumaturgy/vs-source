@@ -5,7 +5,9 @@ from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import Any, Callable, List, Union
 
-from ..dataclasses import IndexFileInfo
+
+from ..dataclasses import __IndexFileInfoBase
+
 
 core = vs.core
 
@@ -30,7 +32,7 @@ class DVDIndexer(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def get_info(self, index_path: Path, file_idx: int = 0) -> IndexFileInfo:
+    def get_info(self, index_path: Path, file_idx: int = 0) -> __IndexFileInfoBase:
         """Returns info about the indexing file"""
         raise NotImplementedError
 
