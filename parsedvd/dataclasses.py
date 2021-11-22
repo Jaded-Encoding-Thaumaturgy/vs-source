@@ -53,13 +53,13 @@ class D2VIndexFooter:
 class DGIndexHeader:
     device: int
     decode_modes: List[int]
-    stream: List[int]
+    stream: Tuple[int, int]
     ranges: List[int]
     depth: int
-    aspect: List[int]
+    aspect: Fraction
     colorimetry: Tuple[int, int, int]
-    packet_size: int
-    vpid: int
+    packet_size: Optional[int] = None
+    vpid: Optional[int] = None
 
 
 @dataclass
