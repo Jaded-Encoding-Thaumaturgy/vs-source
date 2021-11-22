@@ -2,7 +2,7 @@ from fractions import Fraction
 import vapoursynth as vs
 from pathlib import Path
 from functools import lru_cache, reduce as funcreduce
-from typing import Callable, List, Union, Optional, Tuple, Sequence
+from typing import Callable, List, Union, Optional, Tuple
 
 
 from ..dataclasses import (
@@ -106,7 +106,7 @@ class DGIndexNV(DVDIndexer):
             if len(rawline) == 0:
                 break
 
-            line: Sequence[Optional[str]] = rawline.split(" ", maxsplit=6) + ([None] * 6)  # type: ignore
+            line: List[Optional[str]] = [*rawline.split(" ", maxsplit=6), *([None] * 6)]
 
             name = str(line[0])
 
