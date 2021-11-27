@@ -85,8 +85,8 @@ class __LinuxIsoFile(IsoFileCore):
 
         device_info = self.__run_disc_util(self.loop_path, ["info", "-b"], True)
 
-        if "mountpoints" in device_info.lower():
-            cur_mount = device_info[13:].split("\n")[0].strip()
+        if "MountPoints:" in device_info:
+            cur_mount = device_info.split("MountPoints: ")[1].split("\n")[0].strip()
 
             if cur_mount:
                 self.cur_mount = Path(cur_mount)
