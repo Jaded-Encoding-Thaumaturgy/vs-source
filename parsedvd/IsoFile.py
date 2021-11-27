@@ -59,8 +59,8 @@ class __WinIsoFile(IsoFileCore):
 
 
 class __LinuxIsoFile(IsoFileCore):
-    loop_path: Path
-    cur_mount: Path
+    loop_path: Path = Path("")
+    cur_mount: Path = Path("")
 
     def _get_mount_path(self) -> Path:
         if self.iso_path.is_dir():
