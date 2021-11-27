@@ -66,7 +66,9 @@ class __LinuxIsoFile(IsoFileCore):
         if self.iso_path.is_dir():
             return self._mount_folder_path()
 
-        disc = self.__get_mounted_disc() or self.__mount()
+        disc = self.__get_mounted_disc()
+        if disc == Path(""):
+            disc = self.__mount()
 
         return disc / self._subfolder
 
