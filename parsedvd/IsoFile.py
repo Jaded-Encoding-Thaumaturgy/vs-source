@@ -94,16 +94,17 @@ class __LinuxIsoFile(IsoFileCore):
         if not self.loop_path:
             loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
 
-            if "mapped file" not in loop_path.lower() or not (loop_splits := loop_path.split(" at "))[0]:
+            if "mapped file" not in loop_path.lower():
                 raise RuntimeError("IsoFile: Couldn't map the ISO file!")
+
+            loop_splits = loop_path.split(" at ")
 
             self.loop_path = Path(loop_splits[-1][:-1])
 
         if "mounted" not in (cur_mount := self.__run_disc_util(self.loop_path, ["mount", "-b"], True)).lower():
             return None
 
-        if not (mount_splits := cur_mount.split(" at "))[0]:
-            return None
+        mount_splits = cur_mount.split(" at ")
 
         self.cur_mount = Path(mount_splits[-1])
 
