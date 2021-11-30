@@ -50,6 +50,7 @@ class D2VIndexHeader:
     field_op: int = 0
     frame_rate: Fraction = Fraction(30000, 1001)
     location: List[int] = field(default_factory=lambda: [0, 0, 0, 0])
+    ffflength: int = -1
 
 
 @dataclass

@@ -45,15 +45,15 @@ class DVDIndexer(ABC):
             raise FileNotFoundError(f'DVDIndexer: `{self.path}` was not found!')
         return self.path
 
-    def index(self, files: List[Path], output: Path) -> None:
+    def index(self, files: List[Path], output: Path, *cmd_args: str) -> None:
         subprocess.run(
-            list(map(str, self.get_cmd(files, output))),
+            list(map(str, self.get_cmd(files, output))) + list(cmd_args),
             check=True, text=True, encoding='utf-8',
             stdout=subprocess.PIPE, cwd=files[0].parent
         )
 
     def get_idx_file_path(self, path: Path) -> Path:
-        return path.with_suffix(self.ext)
+        return path.with_suffix(f'.{self.ext}')
 
     def file_corrupted(self, index_path: Path) -> None:
         if self.force:

@@ -177,7 +177,8 @@ class IsoFileCore:
 
         vts_0_size = idx_info.videos[0].size
 
-        dvd_menu_length = len(idx_info.frame_data) if vts_0_size > 2 << 12 else 0
+        dvd_menu_length = cast(D2VIndexFileInfo, idx_info).header.ffflength if isinstance(
+            self.indexer, D2VWitch) else (len(idx_info.frame_data) if vts_0_size > 2 << 12 else 0)
 
         self.split_chapters, self.split_clips = self.__split_chapters_clips(ifo_info.chapters, dvd_menu_length)
 

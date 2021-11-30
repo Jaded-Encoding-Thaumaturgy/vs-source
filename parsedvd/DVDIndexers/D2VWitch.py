@@ -1,4 +1,5 @@
 import re
+import tempfile
 import vapoursynth as vs
 from pathlib import Path
 from fractions import Fraction
@@ -17,9 +18,11 @@ core = vs.core
 class D2VWitch(DVDIndexer):
     """Built-in d2vwitch indexer"""
 
+    ffflength_key = "FirstFileFrameLength"
+
     def __init__(
         self, path: Union[Path, str] = 'd2vwitch',
-        vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = '.d2v'
+        vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = 'd2v'
     ) -> None:
         super().__init__(path, vps_indexer or core.d2v.Source, ext)
 
@@ -50,6 +53,42 @@ class D2VWitch(DVDIndexer):
         with open(index_path, 'w') as file:
             file.write('\n'.join(lines))
 
+    def write_idx_file_ffflength(self, index_path: Path) -> int:
+        with index_path.open(mode="r", encoding="utf8") as f:
+            file_content = f.read()
+
+        lines = file_content.split('\n')
+
+        prev_lines, lines = lines[:2], lines[2:]
+
+        if "DGIndex" not in prev_lines[0]:
+            self.file_corrupted(index_path)
+
+        vid_lines, lines = self._split_lines(lines)
+        prev_lines += vid_lines + ['']
+
+        if path := Path(vid_lines[0]):
+            video = IndexFileVideo(path, path.stat().st_size)
+
+        temp_idx_file = Path(tempfile.gettempdir()) / f'{video.path.name}_{video.size}.{self.ext}'
+
+        self.index([video.path], temp_idx_file, '--single-input')
+
+        first_file = self.vps_indexer(temp_idx_file)
+
+        ffflength = first_file.num_frames
+
+        raw_header, lines = self._split_lines(lines)
+
+        raw_header = [line for line in raw_header if self.ffflength_key not in line]
+
+        raw_header += [f"{self.ffflength_key}={ffflength}", '']
+
+        with open(index_path, 'w') as file:
+            file.write('\n'.join(prev_lines + raw_header + lines))
+
+        return ffflength
+
     @lru_cache
     def get_info(self, index_path: Path, file_idx: int = 0) -> D2VIndexFileInfo:
         with index_path.open(mode="r", encoding="utf8") as f:
@@ -57,7 +96,7 @@ class D2VWitch(DVDIndexer):
 
         lines = file_content.split('\n')
 
-        head, lines = lines[:3], lines[3:]
+        head, lines = lines[:2], lines[2:]
 
         if "DGIndex" not in head[0]:
             self.file_corrupted(index_path)
@@ -99,6 +138,11 @@ class D2VWitch(DVDIndexer):
                     header.frame_rate = Fraction(matches.group(1))
             elif key == 'LOCATION':
                 header.location = list(map(int, values))
+            elif key == self.ffflength_key.upper():
+                header.ffflength = int(values[0])
+
+        if header.ffflength < 0:
+            header.ffflength = self.write_idx_file_ffflength(index_path)
 
         frame_data = []
 
