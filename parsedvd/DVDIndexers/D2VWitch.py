@@ -57,7 +57,7 @@ class D2VWitch(DVDIndexer):
 
         lines = file_content.split('\n')
 
-        head, lines = lines[:3], lines[3:]
+        head, lines = lines[:2], lines[2:]
 
         if "DGIndex" not in head[0]:
             self.file_corrupted(index_path)
