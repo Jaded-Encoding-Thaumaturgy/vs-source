@@ -97,7 +97,7 @@ class __LinuxIsoFile(IsoFileCore):
             if "mapped file" not in loop_path.lower():
                 raise RuntimeError("IsoFile: Couldn't map the ISO file!")
 
-            loop_splits = loop_path.split(" at ")
+            loop_splits = loop_path.split(" as ")
 
             self.loop_path = Path(loop_splits[-1][:-1])
 
