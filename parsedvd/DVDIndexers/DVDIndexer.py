@@ -53,7 +53,7 @@ class DVDIndexer(ABC):
         )
 
     def get_idx_file_path(self, path: Path) -> Path:
-        return path.with_suffix(self.ext)
+        return path.with_suffix(f'.{self.ext}')
 
     def file_corrupted(self, index_path: Path) -> None:
         if self.force:

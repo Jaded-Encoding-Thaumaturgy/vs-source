@@ -22,7 +22,7 @@ class DGIndexNV(DVDIndexer):
 
     def __init__(
         self, path: Union[Path, str] = 'DGIndexNV',
-        vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = '.dgi'
+        vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = 'dgi'
     ) -> None:
         super().__init__(path, vps_indexer or core.dgdecodenv.DGSource, ext)
 

@@ -19,7 +19,7 @@ class D2VWitch(DVDIndexer):
 
     def __init__(
         self, path: Union[Path, str] = 'd2vwitch',
-        vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = '.d2v'
+        vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = 'd2v'
     ) -> None:
         super().__init__(path, vps_indexer or core.d2v.Source, ext)
 
