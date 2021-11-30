@@ -34,12 +34,10 @@ class __WinIsoFile(IsoFileCore):
 
         pbjson, err = process.communicate()
 
-        if err or str(pbjson[:len(util)], 'utf8') == util:
-            raise RuntimeError("IsoFile: Couldn't mount ISO file!")
-        elif pbjson == b'':
+        if err or str(pbjson[:len(util)], 'utf8') == util or pbjson == b'':
             return None
         elif util.lower() == "dismount":
-            return Path("")
+            return Path('')
 
         bjson: dict[str, str] = json.loads(str(pbjson, 'utf-8'))
 
@@ -49,8 +47,7 @@ class __WinIsoFile(IsoFileCore):
         return self.__run_disc_util(self.iso_path, 'Get')
 
     def __mount(self) -> Optional[Path]:
-        mount = self.__run_disc_util(self.iso_path, 'Mount')
-        if mount:
+        if (mount := self.__run_disc_util(self.iso_path, 'Mount')):
             atexit.register(self.__unmount)
         return mount
 
@@ -68,25 +65,22 @@ class __LinuxIsoFile(IsoFileCore):
 
         disc = self.__get_mounted_disc() or self.__mount()
 
+        if not disc:
+            raise RuntimeError("IsoFile: Couldn't mount ISO file!")
+
         return disc / self._subfolder
 
     def __subprun(self, *args: Any) -> str:
         return subprocess.run(list(map(str, args)), capture_output=True, universal_newlines=True).stdout
 
     def __get_mounted_disc(self) -> Optional[Path]:
-        loop_path = self.__subprun("losetup", "-j", self.iso_path).strip().split(":")[0]
-
-        if not loop_path:
+        if not (loop_path := self.__subprun("losetup", "-j", self.iso_path).strip().split(":")[0]):
             return self.cur_mount
 
         self.loop_path = Path(loop_path)
 
-        device_info = self.__run_disc_util(self.loop_path, ["info", "-b"], True)
-
-        if "MountPoints:" in device_info:
-            cur_mount = device_info.split("MountPoints:")[1].split("\n")[0].strip()
-
-            if cur_mount:
+        if "MountPoints:" in (device_info := self.__run_disc_util(self.loop_path, ["info", "-b"], True)):
+            if cur_mount := device_info.split("MountPoints:")[1].split("\n")[0].strip():
                 self.cur_mount = Path(cur_mount)
 
         return self.cur_mount
@@ -96,21 +90,22 @@ class __LinuxIsoFile(IsoFileCore):
 
         return output.strip() if strip else output
 
-    def __mount(self) -> Path:
+    def __mount(self) -> Optional[Path]:
         if not self.loop_path:
             loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
 
-            if "mapped file" not in loop_path.lower():
+            if "mapped file" not in loop_path.lower() or not (loop_splits := loop_path.split(" at ")):
                 raise RuntimeError("IsoFile: Couldn't map the ISO file!")
 
-            self.loop_path = Path(loop_path.split(" as ")[-1][:-1])
+            self.loop_path = Path(loop_splits[-1][:-1])
 
-        cur_mount = self.__run_disc_util(self.loop_path, ["mount", "-b"], True)
+        if "mounted" not in (cur_mount := self.__run_disc_util(self.loop_path, ["mount", "-b"], True)).lower():
+            return None
 
-        if "mounted" not in cur_mount.lower():
-            raise RuntimeError("IsoFile: Couldn't mount ISO file!")
+        if not (mount_splits := cur_mount.split(" at ")):
+            return None
 
-        self.cur_mount = Path(cur_mount.split(" at ")[-1])
+        self.cur_mount = Path(mount_splits[-1])
 
         atexit.register(self.__unmount)
 
