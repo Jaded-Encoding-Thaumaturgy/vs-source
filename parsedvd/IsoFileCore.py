@@ -89,7 +89,7 @@ class IsoFileCore:
 
         self.index_info[0] = idx_info
 
-        if isinstance(idx_dgi := cast(Any, idx_info), DGIndexFileInfo) and idx_dgi.footer.film == 100:
+        if isinstance((idx_dgi := cast(Any, idx_info)), DGIndexFileInfo) and idx_dgi.footer.film == 100:
             self.indexer.indexer_kwargs |= {'fieldop': 2}
 
     def get_idx_info(
