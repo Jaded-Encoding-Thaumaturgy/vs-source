@@ -29,7 +29,7 @@ class D2VWitch(DVDIndexer):
         return list(map(str, [self._check_path(), *files, '--output', output]))
     def get_cmd(self, files: List[SPath], output: SPath) -> List[str]:
 
-    def update_idx_file(self, index_path: Path, filepaths: List[Path]) -> None:
+    def update_video_filenames(self, index_path: SPath, filepaths: List[SPath]) -> None:
         with open(index_path, 'r') as file:
             file_content = file.read()
 

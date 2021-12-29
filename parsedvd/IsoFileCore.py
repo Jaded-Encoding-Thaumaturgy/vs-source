@@ -83,7 +83,7 @@ class IsoFileCore:
             if self.__idx_path.stat().st_size == 0:
                 self.__idx_path.unlink()
                 self.indexer.index(files, self.__idx_path)
-            self.indexer.update_idx_file(self.__idx_path, files)
+            self.indexer.update_video_filenames(self.__idx_path, files)
 
         idx_info = self.indexer.get_info(self.__idx_path, 0)
 
