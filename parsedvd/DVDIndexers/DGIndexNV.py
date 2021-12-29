@@ -11,7 +11,7 @@ from ..dataclasses import (
 )
 
 from .DVDIndexer import DVDIndexer
-from .utils import opt_int, opt_ints
+from ..utils.utils import opt_int, opt_ints
 
 
 core = vs.core
