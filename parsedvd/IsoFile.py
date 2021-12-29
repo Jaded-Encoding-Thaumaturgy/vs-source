@@ -9,6 +9,8 @@ from typing import List, Union, Optional, Tuple, Any
 
 from .IsoFileCore import IsoFileCore
 
+__all__ = ['IsoFile']
+
 Range = Union[Optional[int], Tuple[Optional[int], Optional[int]]]
 
 core = vs.core
