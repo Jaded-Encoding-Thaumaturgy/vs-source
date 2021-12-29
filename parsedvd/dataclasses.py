@@ -1,7 +1,8 @@
-from pathlib import Path
 from fractions import Fraction
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple, Union
+
+from .utils.spathlib import SPath
 
 
 @dataclass
@@ -13,7 +14,7 @@ class IFOFileInfo:
 
 @dataclass
 class IndexFileVideo:
-    path: Path
+    path: SPath
     size: int
 
 
@@ -27,7 +28,7 @@ class IndexFileFrameData:
 
 @dataclass
 class __IndexFileInfoBase:
-    path: Path
+    path: SPath
     file_idx: int
     videos: List[IndexFileVideo]
 

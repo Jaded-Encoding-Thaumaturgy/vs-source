@@ -1,10 +1,10 @@
 import vapoursynth as vs
-from pathlib import Path
 from fractions import Fraction
 from typing import Callable, List, Union, Optional
 from functools import lru_cache, reduce as funcreduce
 
 
+from ..utils.spathlib import SPath
 from ..dataclasses import (
     DGIndexFileInfo, DGIndexFooter,
     DGIndexHeader, DGIndexFrameData, IndexFileVideo
@@ -21,13 +21,13 @@ class DGIndexNV(DVDIndexer):
     """Built-in DGIndexNV indexer"""
 
     def __init__(
-        self, path: Union[Path, str] = 'DGIndexNV',
+        self, path: Union[SPath, str] = 'DGIndexNV',
         vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = 'dgi'
     ) -> None:
         super().__init__(path, vps_indexer or core.dgdecodenv.DGSource, ext)
 
-    def get_cmd(self, files: List[Path], output: Path) -> List[str]:
         return list(map(str, [self._check_path(), '-i', ','.join(map(str, files)), '-o', output, '-h']))
+    def get_cmd(self, files: List[SPath], output: SPath) -> List[str]:
 
     def update_idx_file(self, index_path: Path, filepaths: List[Path]) -> None:
         with open(index_path, 'r') as file:
@@ -63,7 +63,7 @@ class DGIndexNV(DVDIndexer):
             file.write('\n'.join(lines))
 
     @lru_cache
-    def get_info(self, index_path: Path, file_idx: int = 0) -> DGIndexFileInfo:
+    def get_info(self, index_path: SPath, file_idx: int = 0) -> DGIndexFileInfo:
         with index_path.open(mode="r", encoding="utf8") as f:
             file_content = f.read()
 
@@ -108,7 +108,7 @@ class DGIndexNV(DVDIndexer):
                 header.vpid = int(values[0])
 
         videos = [
-            IndexFileVideo(Path(' '.join(line[:-1])), int(line[-1]))
+            IndexFileVideo(SPath(' '.join(line[:-1])), int(line[-1]))
             for line in map(lambda a: a.split(' '), vid_lines)
         ]
 

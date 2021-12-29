@@ -1,5 +1,4 @@
 import vapoursynth as vs
-from pathlib import Path
 from io import BufferedReader
 from abc import abstractmethod
 from fractions import Fraction
@@ -8,6 +7,7 @@ from functools import lru_cache
 from itertools import accumulate
 from typing import List, Union, Optional, Tuple, cast, Any, Dict
 
+from .utils.spathlib import SPath
 from .DVDIndexers import D2VWitch, DGIndexNV
 from .dataclasses import D2VIndexFileInfo, DGIndexFileInfo, IFOFileInfo, IndexFileType
 
@@ -18,8 +18,8 @@ core = vs.core
 
 class IsoFileCore:
     _subfolder = "VIDEO_TS"
-    __idx_path: Optional[Path] = None
-    __mount_path: Optional[Path] = None
+    __idx_path: Optional[SPath] = None
+    __mount_path: Optional[SPath] = None
     __clip: Optional[vs.VideoNode] = None
     index_info: List[Optional[IndexFileType]] = [None] * 64
     split_clips: Optional[List[vs.VideoNode]] = None
@@ -28,10 +28,10 @@ class IsoFileCore:
     joined_chapters: Optional[List[int]] = None
 
     def __init__(
-        self, path: Path, indexer: Union[D2VWitch, DGIndexNV] = D2VWitch(),
+        self, path: SPath, indexer: Union[D2VWitch, DGIndexNV] = D2VWitch(),
         safe_indices: bool = False, force_root: bool = False
     ):
-        self.iso_path = Path(path).absolute()
+        self.iso_path = SPath(path).absolute()
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
             raise ValueError(
                 "IsoFile: path needs to point to a .ISO or a dir root of DVD"
@@ -68,8 +68,8 @@ class IsoFileCore:
 
         return self.__clip
 
-    def index_files(self, _files: Union[Path, List[Path]]) -> None:
-        files = [_files] if isinstance(_files, Path) else _files
+    def index_files(self, _files: Union[SPath, List[SPath]]) -> None:
+        files = [_files] if isinstance(_files, SPath) else _files
 
         if not len(files):
             raise FileNotFoundError('IsoFile: You should pass at least one file!')
@@ -93,7 +93,7 @@ class IsoFileCore:
             self.indexer.indexer_kwargs |= {'fieldop': 2}
 
     def get_idx_info(
-        self, index_path: Optional[Path] = None, index: int = 0
+        self, index_path: Optional[SPath] = None, index: int = 0
     ) -> Union[D2VIndexFileInfo, DGIndexFileInfo]:
         idx_path = index_path or self.__idx_path or self.indexer.get_idx_file_path(self.iso_path)
 
@@ -105,7 +105,7 @@ class IsoFileCore:
         self, split_chapters: List[List[int]], dvd_menu_length: int
     ) -> Tuple[List[List[int]], List[vs.VideoNode]]:
         self.__clip = cast(vs.VideoNode, self.__clip)
-        self.__idx_path = cast(Path, self.__idx_path)
+        self.__idx_path = cast(SPath, self.__idx_path)
 
         durations = list(accumulate([0] + [frame[-1] for frame in split_chapters]))
 
@@ -122,7 +122,7 @@ class IsoFileCore:
         return split_chapters, clips
 
     @lru_cache
-    def get_ifo_info(self, mount_path: Path) -> IFOFileInfo:
+    def get_ifo_info(self, mount_path: SPath) -> IFOFileInfo:
         ifo_files = [
             f for f in sorted(mount_path.glob('*.[iI][fF][oO]')) if f.stem != 'VIDEO_TS'
         ]
@@ -306,7 +306,7 @@ class IsoFileCore:
 
         return clip
 
-    def _mount_folder_path(self) -> Path:
+    def _mount_folder_path(self) -> SPath:
         if self.force_root:
             return self.iso_path
 
@@ -316,5 +316,5 @@ class IsoFileCore:
         return self.iso_path / self._subfolder
 
     @abstractmethod
-    def _get_mount_path(self) -> Path:
+    def _get_mount_path(self) -> SPath:
         raise NotImplementedError()

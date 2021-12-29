@@ -1,11 +1,11 @@
 import shutil
 import subprocess
 import vapoursynth as vs
-from pathlib import Path
 from abc import ABC, abstractmethod
 from typing import Any, Callable, List, Union, Tuple
 
 
+from ..utils.spathlib import SPath
 from ..dataclasses import IndexFileType
 
 
@@ -27,23 +27,23 @@ class DVDIndexer(ABC):
         super().__init__()
 
     @abstractmethod
-    def get_cmd(self, files: List[Path], output: Path) -> List[str]:
+    def get_cmd(self, files: List[SPath], output: SPath) -> List[str]:
         """Returns the indexer command"""
         raise NotImplementedError
 
     @abstractmethod
-    def get_info(self, index_path: Path, file_idx: int = 0) -> IndexFileType:
+    def get_info(self, index_path: SPath, file_idx: int = 0) -> IndexFileType:
         """Returns info about the indexing file"""
         raise NotImplementedError
 
     @abstractmethod
-    def update_idx_file(self, index_path: Path, filepaths: List[Path]) -> None:
+    def update_video_filenames(self, index_path: SPath, filepaths: List[SPath]) -> None:
         raise NotImplementedError
 
-    def _check_path(self) -> Path:
-        if not shutil.which(str(self.path)):
-            raise FileNotFoundError(f'DVDIndexer: `{self.path}` was not found!')
-        return self.path
+    def _check_bin_path(self) -> SPath:
+        if not shutil.which(str(self.bin_path)):
+            raise FileNotFoundError(f'DVDIndexer: `{self.bin_path}` was not found!')
+        return self.bin_path
 
     def index(self, files: List[Path], output: Path, *cmd_args: str) -> None:
         subprocess.run(
@@ -55,7 +55,7 @@ class DVDIndexer(ABC):
     def get_idx_file_path(self, path: Path) -> Path:
         return path.with_suffix(f'.{self.ext}')
 
-    def file_corrupted(self, index_path: Path) -> None:
+    def file_corrupted(self, index_path: SPath) -> None:
         if self.force:
             try:
                 index_path.unlink()
