@@ -16,10 +16,10 @@ class DVDIndexer(ABC):
     """Abstract DVD indexer interface."""
 
     def __init__(
-        self, path: Union[Path, str], vps_indexer: Callable[..., vs.VideoNode],
+        self, bin_path: Union[SPath, str], vps_indexer: Callable[..., vs.VideoNode],
         ext: str, force: bool = True, **indexer_kwargs: Any
     ) -> None:
-        self.path = Path(path)
+        self.bin_path = SPath(bin_path)
         self.vps_indexer = vps_indexer
         self.ext = ext
         self.force = force
