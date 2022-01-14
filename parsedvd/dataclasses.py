@@ -1,29 +1,32 @@
 from __future__ import annotations
 
 from fractions import Fraction
-from typing import List, Tuple, Union
 from dataclasses import dataclass, field
+from typing import List, Tuple, Union, NamedTuple
 
 from .utils.types import Matrix
 from .utils.spathlib import SPath
 
 
-@dataclass
-class IFOFileInfo:
+class _SetItemMeta:
+    def __setitem__(self, key: str, value: float | int) -> None:
+        return self.__setattr__(key, value)
+
+
+class IFOFileInfo(NamedTuple):
     chapters: Matrix[int]
     fps: Fraction
     is_multiple_IFOs: bool
 
 
-@dataclass
-class IndexFileVideo:
+class IndexFileVideo(NamedTuple):
     path: SPath
     size: int
     num_frames: int
 
 
 @dataclass
-class IndexFileFrameData:
+class IndexFileFrameData(_SetItemMeta):
     matrix: int
     pic_type: str
     vob: int | None
@@ -31,7 +34,7 @@ class IndexFileFrameData:
 
 
 @dataclass
-class __IndexFileInfoBase:
+class __IndexFileInfoBase(_SetItemMeta):
     path: SPath
     file_idx: int
     videos: List[IndexFileVideo]
@@ -43,7 +46,7 @@ class IndexFileInfo(__IndexFileInfoBase):
 
 
 @dataclass
-class D2VIndexHeader:
+class D2VIndexHeader(_SetItemMeta):
     stream_type: int = 0
     MPEG_type: int = 0
     iDCT_algorithm: int = 0
@@ -65,7 +68,7 @@ class D2VIndexFrameData(IndexFileFrameData):
 
 
 @dataclass
-class DGIndexHeader:
+class DGIndexHeader(_SetItemMeta):
     device: int = 0
     decode_modes: List[int] = field(default_factory=lambda: [0, 0, 0, 0, 0])
     stream: Tuple[int, ...] = (1, 0)
@@ -83,7 +86,7 @@ class DGIndexFrameData(IndexFileFrameData):
 
 
 @dataclass
-class DGIndexFooter:
+class DGIndexFooter(_SetItemMeta):
     film: float = 0.0
     frames_coded: int = 0
     frames_playback: int = 0

@@ -164,6 +164,6 @@ class DGIndexNV(DVDIndexer):
                     else:
                         value = int(values[1])
 
-                    footer.__setattr__(key, value)
+                    footer[key] = value
 
         return DGIndexFileInfo(index_path, file_idx, videos, header, frame_data, footer)
