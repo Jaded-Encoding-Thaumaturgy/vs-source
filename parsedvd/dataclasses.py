@@ -34,14 +34,14 @@ class IndexFileFrameData(_SetItemMeta):
 
 
 @dataclass
-class __IndexFileInfoBase(_SetItemMeta):
+class _IndexFileInfoBase(_SetItemMeta):
     path: SPath
     file_idx: int
     videos: List[IndexFileVideo]
 
 
 @dataclass
-class IndexFileInfo(__IndexFileInfoBase):
+class IndexFileInfo(_IndexFileInfoBase):
     frame_data: List[IndexFileFrameData]
 
 
@@ -94,13 +94,13 @@ class DGIndexFooter(_SetItemMeta):
 
 
 @dataclass
-class D2VIndexFileInfo(__IndexFileInfoBase):
+class D2VIndexFileInfo(_IndexFileInfoBase):
     header: D2VIndexHeader
     frame_data: List[D2VIndexFrameData]
 
 
 @dataclass
-class DGIndexFileInfo(__IndexFileInfoBase):
+class DGIndexFileInfo(_IndexFileInfoBase):
     header: DGIndexHeader
     frame_data: List[DGIndexFrameData]
     footer: DGIndexFooter

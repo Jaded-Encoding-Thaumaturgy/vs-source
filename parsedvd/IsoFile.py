@@ -16,19 +16,19 @@ __all__ = ['IsoFile']
 core = vs.core
 
 
-class __WinIsoFile(IsoFileCore):
+class _WinIsoFile(IsoFileCore):
     def _get_mount_path(self) -> SPath:
         if self.iso_path.is_dir():
             return self._mount_folder_path()
 
-        disc = self.__get_mounted_disc() or self.__mount()
+        disc = self._get_mounted_disc() or self._mount()
 
         if not disc:
             raise RuntimeError("IsoFile: Couldn't mount ISO file!")
 
         return disc / self._subfolder
 
-    def __run_disc_util(self, iso_path: SPath, util: str) -> SPath | None:
+    def _run_disc_util(self, iso_path: SPath, util: str) -> SPath | None:
         process = subprocess.Popen([
             "PowerShell", fr'{util}-DiskImage -ImagePath "{str(iso_path)}" | Get-Volume | ConvertTo-Json'],
             stdout=subprocess.PIPE
@@ -45,19 +45,19 @@ class __WinIsoFile(IsoFileCore):
 
         return SPath(f"{bjson['DriveLetter']}:\\")
 
-    def __get_mounted_disc(self) -> SPath | None:
-        return self.__run_disc_util(self.iso_path, 'Get')
+    def _get_mounted_disc(self) -> SPath | None:
+        return self._run_disc_util(self.iso_path, 'Get')
 
-    def __mount(self) -> SPath | None:
-        if (mount := self.__run_disc_util(self.iso_path, 'Mount')):
-            atexit.register(self.__unmount)
+    def _mount(self) -> SPath | None:
+        if (mount := self._run_disc_util(self.iso_path, 'Mount')):
+            atexit.register(self._unmount)
         return mount
 
-    def __unmount(self) -> SPath | None:
-        return self.__run_disc_util(self.iso_path, 'Dismount')
+    def _unmount(self) -> SPath | None:
+        return self._run_disc_util(self.iso_path, 'Dismount')
 
 
-class __LinuxIsoFile(IsoFileCore):
+class _LinuxIsoFile(IsoFileCore):
     loop_path: SPath | None = None
     cur_mount: SPath | None = None
 
@@ -65,36 +65,36 @@ class __LinuxIsoFile(IsoFileCore):
         if self.iso_path.is_dir():
             return self._mount_folder_path()
 
-        disc = self.__get_mounted_disc() or self.__mount()
+        disc = self._get_mounted_disc() or self._mount()
 
         if not disc:
             raise RuntimeError("IsoFile: Couldn't mount ISO file!")
 
         return disc / self._subfolder
 
-    def __subprun(self, *args: Any) -> str:
+    def _subprun(self, *args: Any) -> str:
         return subprocess.run(list(map(str, args)), capture_output=True, universal_newlines=True).stdout
 
-    def __get_mounted_disc(self) -> SPath | None:
-        if not (loop_path := self.__subprun("losetup", "-j", self.iso_path).strip().split(":")[0]):
+    def _get_mounted_disc(self) -> SPath | None:
+        if not (loop_path := self._subprun("losetup", "-j", self.iso_path).strip().split(":")[0]):
             return self.cur_mount
 
         self.loop_path = SPath(loop_path)
 
-        if "MountPoints:" in (device_info := self.__run_disc_util(self.loop_path, ["info", "-b"], True)):
+        if "MountPoints:" in (device_info := self._run_disc_util(self.loop_path, ["info", "-b"], True)):
             if cur_mount := device_info.split("MountPoints:")[1].split("\n")[0].strip():
                 self.cur_mount = SPath(cur_mount)
 
         return self.cur_mount
 
-    def __run_disc_util(self, path: SPath, params: List[str], strip: bool = False) -> str:
-        output = self.__subprun("udisksctl", *params, str(path))
+    def _run_disc_util(self, path: SPath, params: List[str], strip: bool = False) -> str:
+        output = self._subprun("udisksctl", *params, str(path))
 
         return output.strip() if strip else output
 
-    def __mount(self) -> SPath | None:
+    def _mount(self) -> SPath | None:
         if not self.loop_path:
-            loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
+            loop_path = self._run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
 
             if "mapped file" not in loop_path.lower():
                 raise RuntimeError("IsoFile: Couldn't map the ISO file!")
@@ -103,22 +103,22 @@ class __LinuxIsoFile(IsoFileCore):
 
             self.loop_path = SPath(loop_splits[-1][:-1])
 
-        if "mounted" not in (cur_mount := self.__run_disc_util(self.loop_path, ["mount", "-b"], True)).lower():
+        if "mounted" not in (cur_mount := self._run_disc_util(self.loop_path, ["mount", "-b"], True)).lower():
             return None
 
         mount_splits = cur_mount.split(" at ")
 
         self.cur_mount = SPath(mount_splits[-1])
 
-        atexit.register(self.__unmount)
+        atexit.register(self._unmount)
 
         return self.cur_mount
 
-    def __unmount(self) -> bool:
+    def _unmount(self) -> bool:
         if not self.loop_path:
             return True
-        self.__run_disc_util(self.loop_path, ["unmount", "-b", ])
-        return bool(self.__run_disc_util(self.loop_path, ["loop-delete", "-b", ]))
+        self._run_disc_util(self.loop_path, ["unmount", "-b", ])
+        return bool(self._run_disc_util(self.loop_path, ["loop-delete", "-b", ]))
 
 
-IsoFile = __WinIsoFile if os_name == 'nt' else __LinuxIsoFile
+IsoFile = _WinIsoFile if os_name == 'nt' else _LinuxIsoFile

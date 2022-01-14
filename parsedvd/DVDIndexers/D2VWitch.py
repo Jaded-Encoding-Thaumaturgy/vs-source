@@ -30,7 +30,7 @@ class D2VWitch(DVDIndexer):
         super().__init__(path, vps_indexer or core.d2v.Source, ext)
 
     def get_cmd(self, files: List[SPath], output: SPath) -> List[str]:
-        return list(map(str, [self._check_bin_path(), *files, '--output', output]))
+        return list(map(str, [self._get_bin_path(), *files, '--output', output]))
 
     def update_video_filenames(self, index_path: SPath, filepaths: List[SPath]) -> None:
         with open(index_path, 'r') as file:

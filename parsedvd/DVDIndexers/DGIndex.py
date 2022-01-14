@@ -26,7 +26,7 @@ class DGIndex(DGIndexNV):
         idct_algo: int = 5, field_op: int = 2, yuv_to_rgb: int = 1
     ) -> List[str]:
         return list(map(str, [
-            self._check_bin_path(), "-AIF", '[' + ','.join([f'"{str(path)}"' for path in files]) + ']',
+            self._get_bin_path(), "-AIF", '[' + ','.join([f'"{str(path)}"' for path in files]) + ']',
             "-IA", str(idct_algo), "-FO", field_op, "-YR", yuv_to_rgb,
             "-OM", "0", "-HIDE", "-EXIT", "-O", output
         ]))

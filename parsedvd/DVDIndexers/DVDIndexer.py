@@ -44,7 +44,7 @@ class DVDIndexer(ABC):
     def update_video_filenames(self, index_path: SPath, filepaths: List[SPath]) -> None:
         raise NotImplementedError
 
-    def _check_bin_path(self) -> SPath:
+    def _get_bin_path(self) -> SPath:
         if not shutil.which(str(self.bin_path)):
             raise FileNotFoundError(f'DVDIndexer: `{self.bin_path}` was not found!')
         return self.bin_path
