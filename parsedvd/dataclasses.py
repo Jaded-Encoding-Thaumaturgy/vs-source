@@ -1,13 +1,16 @@
-from fractions import Fraction
-from dataclasses import dataclass, field
-from typing import List, Optional, Tuple, Union
+from __future__ import annotations
 
+from fractions import Fraction
+from typing import List, Tuple, Union
+from dataclasses import dataclass, field
+
+from .utils.types import Matrix
 from .utils.spathlib import SPath
 
 
 @dataclass
 class IFOFileInfo:
-    chapters: List[List[int]]
+    chapters: Matrix[int]
     fps: Fraction
     is_multiple_IFOs: bool
 
@@ -16,14 +19,15 @@ class IFOFileInfo:
 class IndexFileVideo:
     path: SPath
     size: int
+    num_frames: int
 
 
 @dataclass
 class IndexFileFrameData:
     matrix: int
     pic_type: str
-    vob: Optional[int]
-    cell: Optional[int]
+    vob: int | None
+    cell: int | None
 
 
 @dataclass
@@ -51,7 +55,6 @@ class D2VIndexHeader:
     field_op: int = 0
     frame_rate: Fraction = Fraction(30000, 1001)
     location: List[int] = field(default_factory=lambda: [0, 0, 0, 0])
-    ffflength: int = -1
 
 
 @dataclass
@@ -70,8 +73,8 @@ class DGIndexHeader:
     depth: int = 8
     aspect: Fraction = Fraction(16, 9)
     colorimetry: Tuple[int, ...] = (2, 2, 2)
-    packet_size: Optional[int] = None
-    vpid: Optional[int] = None
+    packet_size: int | None = None
+    vpid: int | None = None
 
 
 @dataclass

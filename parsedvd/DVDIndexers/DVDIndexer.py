@@ -1,11 +1,15 @@
+from __future__ import annotations
+
 import shutil
 import subprocess
+from hashlib import md5
 import vapoursynth as vs
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Union, Tuple
+from typing import Any, Callable, List, Tuple, Sequence
 
 
 from ..utils.spathlib import SPath
+from ..utils.types import SPathLike
 from ..dataclasses import IndexFileType
 
 
@@ -16,7 +20,7 @@ class DVDIndexer(ABC):
     """Abstract DVD indexer interface."""
 
     def __init__(
-        self, bin_path: Union[SPath, str], vps_indexer: Callable[..., vs.VideoNode],
+        self, bin_path: SPathLike, vps_indexer: Callable[..., vs.VideoNode],
         ext: str, force: bool = True, **indexer_kwargs: Any
     ) -> None:
         self.bin_path = SPath(bin_path)

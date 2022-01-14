@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import vapoursynth as vs
 from fractions import Fraction
-from typing import Callable, List, Union, Optional
+from typing import Callable, List, Sequence
 from functools import lru_cache, reduce as funcreduce
 
 
@@ -11,6 +13,7 @@ from ..dataclasses import (
 )
 
 from .DVDIndexer import DVDIndexer
+from ..utils.types import SPathLike
 from ..utils.utils import opt_int, opt_ints
 
 
@@ -21,8 +24,8 @@ class DGIndexNV(DVDIndexer):
     """Built-in DGIndexNV indexer"""
 
     def __init__(
-        self, path: Union[SPath, str] = 'DGIndexNV',
-        vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = 'dgi'
+        self, path: SPathLike = 'DGIndexNV',
+        vps_indexer: Callable[..., vs.VideoNode] | None = None, ext: str = 'dgi'
     ) -> None:
         super().__init__(path, vps_indexer or core.dgdecodenv.DGSource, ext)
 
@@ -122,7 +125,7 @@ class DGIndexNV(DVDIndexer):
             if len(rawline) == 0:
                 break
 
-            line: List[Optional[str]] = [*rawline.split(" ", maxsplit=6), *([None] * 6)]
+            line: Sequence[str | None] = [*rawline.split(" ", maxsplit=6), *([None] * 6)]
 
             name = str(line[0])
 

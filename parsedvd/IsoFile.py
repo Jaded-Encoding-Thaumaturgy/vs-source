@@ -1,17 +1,17 @@
+from __future__ import annotations
+
 import json
 import atexit
 import subprocess
 import vapoursynth as vs
 from os import name as os_name
-from typing import List, Union, Optional, Tuple, Any
+from typing import List, Any
 
 from .utils.spathlib import SPath
 
 from .IsoFileCore import IsoFileCore
 
 __all__ = ['IsoFile']
-
-Range = Union[Optional[int], Tuple[Optional[int], Optional[int]]]
 
 core = vs.core
 
@@ -28,7 +28,7 @@ class __WinIsoFile(IsoFileCore):
 
         return disc / self._subfolder
 
-    def __run_disc_util(self, iso_path: SPath, util: str) -> Optional[SPath]:
+    def __run_disc_util(self, iso_path: SPath, util: str) -> SPath | None:
         process = subprocess.Popen([
             "PowerShell", fr'{util}-DiskImage -ImagePath "{str(iso_path)}" | Get-Volume | ConvertTo-Json'],
             stdout=subprocess.PIPE
@@ -45,21 +45,21 @@ class __WinIsoFile(IsoFileCore):
 
         return SPath(f"{bjson['DriveLetter']}:\\")
 
-    def __get_mounted_disc(self) -> Optional[SPath]:
+    def __get_mounted_disc(self) -> SPath | None:
         return self.__run_disc_util(self.iso_path, 'Get')
 
-    def __mount(self) -> Optional[SPath]:
+    def __mount(self) -> SPath | None:
         if (mount := self.__run_disc_util(self.iso_path, 'Mount')):
             atexit.register(self.__unmount)
         return mount
 
-    def __unmount(self) -> Optional[SPath]:
+    def __unmount(self) -> SPath | None:
         return self.__run_disc_util(self.iso_path, 'Dismount')
 
 
 class __LinuxIsoFile(IsoFileCore):
-    loop_path: Optional[SPath] = None
-    cur_mount: Optional[SPath] = None
+    loop_path: SPath | None = None
+    cur_mount: SPath | None = None
 
     def _get_mount_path(self) -> SPath:
         if self.iso_path.is_dir():
@@ -75,7 +75,7 @@ class __LinuxIsoFile(IsoFileCore):
     def __subprun(self, *args: Any) -> str:
         return subprocess.run(list(map(str, args)), capture_output=True, universal_newlines=True).stdout
 
-    def __get_mounted_disc(self) -> Optional[SPath]:
+    def __get_mounted_disc(self) -> SPath | None:
         if not (loop_path := self.__subprun("losetup", "-j", self.iso_path).strip().split(":")[0]):
             return self.cur_mount
 
@@ -92,7 +92,7 @@ class __LinuxIsoFile(IsoFileCore):
 
         return output.strip() if strip else output
 
-    def __mount(self) -> Optional[SPath]:
+    def __mount(self) -> SPath | None:
         if not self.loop_path:
             loop_path = self.__run_disc_util(self.iso_path, ["loop-setup", "-f"], True)
 

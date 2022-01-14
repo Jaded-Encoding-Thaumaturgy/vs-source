@@ -1,12 +1,15 @@
+from __future__ import annotations
+
 import re
 import tempfile
 import vapoursynth as vs
 from fractions import Fraction
 from functools import lru_cache
-from typing import Callable, List, Union, Optional
+from typing import Callable, List
 
 
 from ..utils.spathlib import SPath
+from ..utils.types import SPathLike
 from ..dataclasses import D2VIndexFileInfo, D2VIndexFrameData, D2VIndexHeader, IndexFileVideo
 
 from .DVDIndexer import DVDIndexer
@@ -21,8 +24,8 @@ class D2VWitch(DVDIndexer):
     ffflength_key = "FirstFileFrameLength"
 
     def __init__(
-        self, path: Union[SPath, str] = 'd2vwitch',
-        vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = 'd2v'
+        self, path: SPathLike = 'd2vwitch',
+        vps_indexer: Callable[..., vs.VideoNode] | None = None, ext: str = 'd2v'
     ) -> None:
         super().__init__(path, vps_indexer or core.d2v.Source, ext)
 

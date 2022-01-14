@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import vapoursynth as vs
 from io import BufferedReader
 from abc import abstractmethod
@@ -5,30 +7,29 @@ from fractions import Fraction
 from pyparsedvd import vts_ifo
 from functools import lru_cache
 from itertools import accumulate
-from typing import List, Union, Optional, Tuple, cast, Any, Dict
+from typing import List, Tuple, cast, Any, Dict, Sequence
 
+from .utils.types import Range
 from .utils.spathlib import SPath
-from .DVDIndexers import D2VWitch, DGIndexNV
+from .DVDIndexers import D2VWitch, DGIndexNV, DGIndex
 from .dataclasses import D2VIndexFileInfo, DGIndexFileInfo, IFOFileInfo, IndexFileType
-
-Range = Union[Optional[int], Tuple[Optional[int], Optional[int]]]
 
 core = vs.core
 
 
 class IsoFileCore:
     _subfolder = "VIDEO_TS"
-    __idx_path: Optional[SPath] = None
-    __mount_path: Optional[SPath] = None
-    __clip: Optional[vs.VideoNode] = None
-    index_info: List[Optional[IndexFileType]] = [None] * 64
-    split_clips: Optional[List[vs.VideoNode]] = None
-    joined_clip: Optional[vs.VideoNode] = None
-    split_chapters: Optional[List[List[int]]] = None
-    joined_chapters: Optional[List[int]] = None
+    __idx_path: SPath | None = None
+    __mount_path: SPath | None = None
+    __clip: vs.VideoNode | None = None
+    index_info: Sequence[IndexFileType | None] = [None] * 64
+    split_clips: List[vs.VideoNode] | None = None
+    joined_clip: vs.VideoNode | None = None
+    split_chapters: List[List[int]] | None = None
+    joined_chapters: List[int] | None = None
 
     def __init__(
-        self, path: SPath, indexer: Union[D2VWitch, DGIndexNV] = D2VWitch(),
+        self, path: SPath, indexer: D2VWitch | DGIndexNV | DGIndex = D2VWitch(),
         safe_indices: bool = False, force_root: bool = False
     ):
         self.iso_path = SPath(path).absolute()
@@ -68,7 +69,7 @@ class IsoFileCore:
 
         return self.__clip
 
-    def index_files(self, _files: Union[SPath, List[SPath]]) -> None:
+    def index_files(self, _files: SPath | List[SPath]) -> None:
         files = [_files] if isinstance(_files, SPath) else _files
 
         if not len(files):
@@ -93,8 +94,8 @@ class IsoFileCore:
             self.indexer.indexer_kwargs |= {'fieldop': 2}
 
     def get_idx_info(
-        self, index_path: Optional[SPath] = None, index: int = 0
-    ) -> Union[D2VIndexFileInfo, DGIndexFileInfo]:
+        self, index_path: SPath | None = None, index: int = 0
+    ) -> D2VIndexFileInfo | DGIndexFileInfo:
         idx_path = index_path or self.__idx_path or self.indexer.get_idx_file_path(self.iso_path)
 
         self.index_info[index] = self.indexer.get_info(idx_path, index)
@@ -250,8 +251,8 @@ class IsoFileCore:
         return self.split_clips, self.split_chapters, self.joined_clip, self.joined_chapters
 
     def get_title(
-        self, clip_index: Optional[int] = None, chapters: Optional[Union[Range, List[Range]]] = None
-    ) -> Union[vs.VideoNode, List[vs.VideoNode]]:
+        self, clip_index: int | None = None, chapters: Range | List[Range] | None = None
+    ) -> vs.VideoNode | List[vs.VideoNode]:
         if not self.__clip:
             self.__clip = self.source()
 
@@ -267,8 +268,8 @@ class IsoFileCore:
 
         rlength = len(ranges)
 
-        start: Optional[int]
-        end: Optional[int]
+        start: int | None
+        end: int | None
 
         if isinstance(chapters, int):
             start, end = ranges[0], ranges[-1]
