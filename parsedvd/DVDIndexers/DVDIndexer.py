@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import re
 import shutil
+import tempfile
 import subprocess
 from hashlib import md5
 import vapoursynth as vs
 from abc import ABC, abstractmethod
-from typing import Any, Callable, List, Tuple, Sequence
+from typing import Any, Callable, List, Tuple, Sequence, Literal
 
 
 from ..utils.spathlib import SPath
@@ -18,6 +20,7 @@ core = vs.core
 
 class DVDIndexer(ABC):
     """Abstract DVD indexer interface."""
+    index_folder_name = '.parsedvd'
 
     def __init__(
         self, bin_path: SPathLike, vps_indexer: Callable[..., vs.VideoNode],
@@ -45,18 +48,79 @@ class DVDIndexer(ABC):
         raise NotImplementedError
 
     def _get_bin_path(self) -> SPath:
-        if not shutil.which(str(self.bin_path)):
+        if not (bin_path := shutil.which(str(self.bin_path))):
             raise FileNotFoundError(f'DVDIndexer: `{self.bin_path}` was not found!')
-        return self.bin_path
+        return bin_path
 
-    def index(self, files: List[Path], output: Path, *cmd_args: str) -> None:
-        subprocess.run(
-            list(map(str, self.get_cmd(files, output))) + list(cmd_args),
-            check=True, text=True, encoding='utf-8',
-            stdout=subprocess.PIPE, cwd=files[0].parent
-        )
+    def _run_index(self, files: List[SPath], output: SPath, cmd_args: Sequence[str]) -> None:
+        output.mkdirp()
 
-    def get_idx_file_path(self, path: Path) -> Path:
+        arguments = list(map(str, self.get_cmd(files, output))) + list(cmd_args)
+
+        cwd = output.get_folder().to_str()
+
+        popen_args = dict(text=True, encoding='utf-8', shell=True, cwd=cwd)
+
+        subprocess.Popen(arguments, **popen_args).wait()
+
+    def get_out_folder(
+        self, output_folder: SPathLike | Literal[False] | None = None, file: SPath | None = None
+    ) -> SPath:
+        if output_folder is None:
+            return SPath(file).get_folder() if file else self.get_out_folder(False)
+        elif not output_folder:
+            return SPath(tempfile.gettempdir())
+
+        return SPath(output_folder)
+
+    def index(
+        self, files: List[SPath], force: bool = False, split_files: bool = False,
+        output_folder: SPathLike | Literal[False] | None = None, single_input: bool = False, *cmd_args: str
+    ) -> List[SPath]:
+        if len(unique_folders := list(set([f.get_folder().to_str() for f in files]))) > 1:
+            return [
+                self.index([
+                    f for f in files if f.get_folder().to_str() == folder
+                ], force, split_files, output_folder, single_input)
+                for folder in unique_folders
+            ]
+
+        source_folder = files[0].get_folder()
+        dest_folder = self.get_out_folder(output_folder, files[0])
+
+        if single_input:
+            for file in files:
+                if matches := re.search(r"VTS_([0-9]{2})_([0-9])\.VOB", file.name, re.IGNORECASE):
+                    files += source_folder.glob(
+                        f'[vV][tT][sS]_[{matches[1][0]}-9][{matches[1][1]}-9]_[{matches[2]}-9].[vV][oO][bB]'
+                    )
+
+        files = list(sorted(set(files)))
+
+        hash_str = self.get_videos_hash(files)
+
+        def _index(files: List[SPath], output: SPath) -> None:
+            if output.is_file():
+                if output.stat().st_size == 0 or force:
+                    output.unlink()
+                    return self._run_index(files, output, cmd_args)
+
+                return self.update_video_filenames(output, files)
+            return self._run_index(files, output, cmd_args)
+
+        if split_files:
+            outputs = [self.get_video_idx_path(dest_folder, hash_str, file.name) for file in files]
+            for file, output in zip(files, outputs):
+                _index([file], output)
+
+            return outputs
+
+        output = self.get_video_idx_path(dest_folder, hash_str, 'JOINED' if len(files) > 1 else 'SINGLE')
+        _index(files, output)
+
+        return [output]
+
+    def get_idx_file_path(self, path: SPath) -> SPath:
         return path.with_suffix(f'.{self.ext}')
 
     def file_corrupted(self, index_path: SPath) -> None:
@@ -68,7 +132,28 @@ class DVDIndexer(ABC):
         else:
             raise RuntimeError("IsoFile: Index file corrupted! Delete it and retry.")
 
+    def get_video_idx_path(self, folder: SPath, file_hash: str, video_name: SPathLike) -> SPath:
+        vid_name = SPath(video_name).stem
+        filename = '_'.join([file_hash, vid_name])
+        return self.get_idx_file_path(folder / self.index_folder_name / filename)
+
     @staticmethod
     def _split_lines(buff: List[str]) -> Tuple[List[str], List[str]]:
-        split_idx = buff.index('')
-        return buff[:split_idx], buff[split_idx + 1:]
+        return buff[:(split_idx := buff.index(''))], buff[split_idx + 1:]
+
+    @staticmethod
+    def get_joined_names(files: List[SPath]) -> str:
+        return '_'.join([file.name for file in files])
+
+    @staticmethod
+    def get_videos_hash(files: List[SPath]) -> str:
+        lenght = sum(file.stat().st_size for file in files)
+        to_hash = lenght.to_bytes(32, 'little') + DVDIndexer.get_joined_names(files).encode()
+        return md5(to_hash).hexdigest()
+
+    def source(
+        self, file: SPath, force: bool = False, output_folder: SPathLike | Literal[False] | None = None,
+        single_input: bool = True, *indexer_args: str, **vps_indexer_kwargs: Any
+    ) -> vs.VideoNode:
+        idx_filename = self.index([SPath(file)], force, False, output_folder, single_input, *indexer_args)[0]
+        return self.vps_indexer(idx_filename.to_str(), **vps_indexer_kwargs)

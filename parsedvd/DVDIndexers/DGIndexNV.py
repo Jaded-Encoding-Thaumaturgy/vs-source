@@ -6,15 +6,15 @@ from typing import Callable, List, Sequence
 from functools import lru_cache, reduce as funcreduce
 
 
+from .DVDIndexer import DVDIndexer
+
 from ..utils.spathlib import SPath
+from ..utils.types import SPathLike
+from ..utils.utils import opt_int, opt_ints
 from ..dataclasses import (
     DGIndexFileInfo, DGIndexFooter,
     DGIndexHeader, DGIndexFrameData, IndexFileVideo
 )
-
-from .DVDIndexer import DVDIndexer
-from ..utils.types import SPathLike
-from ..utils.utils import opt_int, opt_ints
 
 
 core = vs.core
@@ -30,7 +30,7 @@ class DGIndexNV(DVDIndexer):
         super().__init__(path, vps_indexer or core.dgdecodenv.DGSource, ext)
 
     def get_cmd(self, files: List[SPath], output: SPath) -> List[str]:
-        return list(map(str, [self._get_bin_path(), '-i', ','.join(map(str, files)), '-o', output, '-h']))
+        return list(map(str, [self._get_bin_path(), '-i', f'"{",".join(map(str, files))}"', '-o', f'"{output}"', '-h']))
 
     def update_video_filenames(self, index_path: SPath, filepaths: List[SPath]) -> None:
         with open(index_path, 'r') as file:
@@ -46,29 +46,31 @@ class DGIndexNV(DVDIndexer):
         start_videos = lines.index('') + 1
         end_videos = lines.index('', start_videos)
 
-        if (n_files := end_videos - start_videos) != len(str_filepaths):
+        if end_videos - start_videos != len(str_filepaths):
             self.file_corrupted(index_path)
 
-        split_videos = [
-            [line[:-1], ' '.join(line[-1:])] for line in [
-                line.split(' ') for line in lines[start_videos:end_videos]
-            ]
+        split_lines = [
+            line.split(' ') for line in lines[start_videos:end_videos]
         ]
 
-        if [s[0] for s in split_videos] == str_filepaths:
+        current_paths = [line[:-1][0] for line in split_lines]
+
+        if current_paths == str_filepaths:
             return
 
+        video_args = [line[-1:] for line in split_lines]
+
         lines[start_videos:end_videos] = [
-            f"{filepaths[i]} {split_videos[i][1]}" for i in range(n_files)
+            ' '.join([path, *args]) for path, args in zip(str_filepaths, video_args)
         ]
 
         with open(index_path, 'w') as file:
             file.write('\n'.join(lines))
 
     @lru_cache
-    def get_info(self, index_path: SPath, file_idx: int = 0) -> DGIndexFileInfo:
-        with index_path.open(mode="r", encoding="utf8") as f:
-            file_content = f.read()
+    def get_info(self, index_path: SPath, file_idx: int = -1) -> DGIndexFileInfo:
+        with open(index_path, 'r') as file:
+            file_content = file.read()
 
         lines = file_content.split('\n')
 
@@ -111,8 +113,8 @@ class DGIndexNV(DVDIndexer):
                 header.vpid = int(values[0])
 
         videos = [
-            IndexFileVideo(SPath(' '.join(line[:-1])), int(line[-1]))
-            for line in map(lambda a: a.split(' '), vid_lines)
+            IndexFileVideo(SPath(' '.join(line[:-1])), int(line[-1]), 0)  # TODO
+            for line in [line.split(' ') for line in vid_lines]
         ]
 
         max_sector = funcreduce(lambda a, b: a + b, [v.size for v in videos[:file_idx + 1]], 0)
