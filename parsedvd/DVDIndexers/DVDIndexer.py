@@ -50,7 +50,7 @@ class DVDIndexer(ABC):
     def _get_bin_path(self) -> SPath:
         if not (bin_path := shutil.which(str(self.bin_path))):
             raise FileNotFoundError(f'DVDIndexer: `{self.bin_path}` was not found!')
-        return bin_path
+        return SPath(bin_path)
 
     def _run_index(self, files: List[SPath], output: SPath, cmd_args: Sequence[str]) -> None:
         output.mkdirp()
@@ -79,10 +79,12 @@ class DVDIndexer(ABC):
     ) -> List[SPath]:
         if len(unique_folders := list(set([f.get_folder().to_str() for f in files]))) > 1:
             return [
-                self.index([
-                    f for f in files if f.get_folder().to_str() == folder
-                ], force, split_files, output_folder, single_input)
-                for folder in unique_folders
+                c for s in (
+                    self.index([
+                        f for f in files if f.get_folder().to_str() == folder
+                    ], force, split_files, output_folder, single_input)
+                    for folder in unique_folders
+                ) for c in s
             ]
 
         source_folder = files[0].get_folder()
