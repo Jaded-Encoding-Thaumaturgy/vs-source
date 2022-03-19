@@ -157,5 +157,9 @@ class DVDIndexer(ABC):
         self, file: SPath, force: bool = False, output_folder: SPathLike | Literal[False] | None = None,
         single_input: bool = True, *indexer_args: str, **vps_indexer_kwargs: Any
     ) -> vs.VideoNode:
-        idx_filename = self.index([SPath(file)], force, False, output_folder, single_input, *indexer_args)[0]
-        return self.vps_indexer(idx_filename.to_str(), **vps_indexer_kwargs)
+        return core.std.Splice([
+            self.vps_indexer(idx_filename.to_str(), **vps_indexer_kwargs)
+            for idx_filename in self.index(
+                [SPath(file)], force, False, output_folder, single_input, *indexer_args
+            )
+        ])
