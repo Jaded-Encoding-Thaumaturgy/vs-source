@@ -91,7 +91,7 @@ class DVDIndexer(ABC):
         dest_folder = self.get_out_folder(output_folder, files[0])
 
         if single_input:
-            for file in files:
+            for file in list(files):
                 if matches := re.search(r"VTS_([0-9]{2})_([0-9])\.VOB", file.name, re.IGNORECASE):
                     files += source_folder.glob(
                         f'[vV][tT][sS]_[{matches[1][0]}-9][{matches[1][1]}-9]_[{matches[2]}-9].[vV][oO][bB]'
