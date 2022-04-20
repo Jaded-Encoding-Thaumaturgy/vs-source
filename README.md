@@ -9,10 +9,10 @@ You can find me in the [IEW Discord server](https://discord.gg/qxTxVJGtst), @Set
 <br><br>
 ## How to install
 
-Install `parsedvd` with the following command:
+Install `vsparsedvd` with the following command:
 
 ```sh
-$ pip install parsedvd
+$ pip install vsparsedvd
 ```
 
 Or if you want the latest git version, install it with this command:
@@ -27,7 +27,7 @@ $ pip install git+https://github.com/Setsugennoao/vs-parsedvd.git
 After installation, functions can be loaded and used as follows:
 
 ```py
-from parsedvd import IsoFile, DGIndexNV
+from vsparsedvd import IsoFile, DGIndexNV
 
 # Indexing with D2VWitch
 haruhi = IsoFile(r".\Suzumiya_2009_DVD\KABA_6001.ISO")

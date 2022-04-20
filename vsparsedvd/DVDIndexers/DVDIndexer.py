@@ -20,7 +20,7 @@ core = vs.core
 
 class DVDIndexer(ABC):
     """Abstract DVD indexer interface."""
-    index_folder_name = '.parsedvd'
+    index_folder_name = '.vsparsedvd'
 
     def __init__(
         self, bin_path: SPathLike, vps_indexer: Callable[..., vs.VideoNode],
