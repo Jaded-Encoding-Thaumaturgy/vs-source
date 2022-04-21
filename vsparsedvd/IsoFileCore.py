@@ -29,14 +29,12 @@ class IsoFileCore:
     joined_chapters: List[int] | None = None
 
     def __init__(
-        self, path: SPath, indexer: D2VWitch | DGIndexNV | DGIndex = D2VWitch(),
-        safe_indices: bool = False, force_root: bool = False
+        self, path: SPath, indexer: DVDIndexer = D2VWitch(), safe_indices: bool = False, force_root: bool = False
     ):
         self.iso_path = SPath(path).absolute()
+
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
-            raise ValueError(
-                "IsoFile: path needs to point to a .ISO or a dir root of DVD"
-            )
+            raise ValueError("IsoFile: path needs to point to a .ISO or a dir root of DVD")
 
         self.indexer = indexer
         self.safe_indices = safe_indices
@@ -134,7 +132,7 @@ class IsoFileCore:
 
         for ifo_file in ifo_files:
             with open(ifo_file, 'rb') as file:
-                curr_pgci = vts_ifo.load_vts_pgci(cast(BufferedReader, file))
+                curr_pgci = vts_ifo.load_vts_pgci(file)
                 program_chains += curr_pgci.program_chains[int(m_ifos):]
 
         split_chapters: List[List[int]] = []

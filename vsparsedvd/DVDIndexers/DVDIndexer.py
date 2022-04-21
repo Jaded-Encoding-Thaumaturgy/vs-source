@@ -108,17 +108,17 @@ class DVDIndexer(ABC):
                 return self.update_video_filenames(output, files)
             return self._run_index(files, output, cmd_args)
 
-        if split_files:
-            outputs = [self.get_video_idx_path(dest_folder, hash_str, file.name) for file in files]
-            for file, output in zip(files, outputs):
-                _index([file], output)
+        if not split_files:
+            output = self.get_video_idx_path(dest_folder, hash_str, 'JOINED' if len(files) > 1 else 'SINGLE')
+            _index(files, output)
+            return [output]
 
-            return outputs
+        outputs = [self.get_video_idx_path(dest_folder, hash_str, file.name) for file in files]
 
-        output = self.get_video_idx_path(dest_folder, hash_str, 'JOINED' if len(files) > 1 else 'SINGLE')
-        _index(files, output)
+        for file, output in zip(files, outputs):
+            _index([file], output)
 
-        return [output]
+        return outputs
 
     def get_idx_file_path(self, path: SPath) -> SPath:
         return path.with_suffix(f'.{self.ext}')

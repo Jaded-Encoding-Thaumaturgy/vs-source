@@ -9,7 +9,6 @@ from pathlib import Path
 
 class SPath(Path):
     """Modified version of pathlib.Path"""
-    # pylint: disable=no-member
     _flavour = type(Path())._flavour  # type: ignore
 
     def format(self, *args: Any, **kwargs: Any) -> SPath:
