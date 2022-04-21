@@ -17,17 +17,6 @@ core = vs.core
 
 
 class _WinIsoFile(IsoFileCore):
-    def _get_mount_path(self) -> SPath:
-        if self.iso_path.is_dir():
-            return self._mount_folder_path()
-
-        disc = self._get_mounted_disc() or self._mount()
-
-        if not disc:
-            raise RuntimeError("IsoFile: Couldn't mount ISO file!")
-
-        return disc / self._subfolder
-
     def _run_disc_util(self, iso_path: SPath, util: str) -> SPath | None:
         process = subprocess.Popen([
             "PowerShell", fr'{util}-DiskImage -ImagePath "{str(iso_path)}" | Get-Volume | ConvertTo-Json'],
@@ -60,17 +49,6 @@ class _WinIsoFile(IsoFileCore):
 class _LinuxIsoFile(IsoFileCore):
     loop_path: SPath | None = None
     cur_mount: SPath | None = None
-
-    def _get_mount_path(self) -> SPath:
-        if self.iso_path.is_dir():
-            return self._mount_folder_path()
-
-        disc = self._get_mounted_disc() or self._mount()
-
-        if not disc:
-            raise RuntimeError("IsoFile: Couldn't mount ISO file!")
-
-        return disc / self._subfolder
 
     def _subprun(self, *args: Any) -> str:
         return subprocess.run(list(map(str, args)), capture_output=True, universal_newlines=True).stdout

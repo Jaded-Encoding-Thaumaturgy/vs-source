@@ -314,6 +314,28 @@ class IsoFileCore:
 
         return self.iso_path / self._subfolder
 
+
+    @property
+    def mount_path(self) -> SPath:
+        if self._mount_path is not None:
+            return self._mount_path
+
+        if self.iso_path.is_dir():
+            return self._mount_folder_path()
+
+        disc = self._get_mounted_disc() or self._mount()
+
+        if not disc:
+            raise RuntimeError("IsoFile: Couldn't mount ISO file!")
+
+        self._mount_path = disc / self._subfolder
+
+        return self._mount_path
+
     @abstractmethod
-    def _get_mount_path(self) -> SPath:
+    def _get_mounted_disc(self) -> SPath | None:
+        raise NotImplementedError()
+
+    @abstractmethod
+    def _mount(self) -> SPath | None:
         raise NotImplementedError()
