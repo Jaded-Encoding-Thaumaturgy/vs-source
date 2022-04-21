@@ -59,9 +59,7 @@ class DVDIndexer(ABC):
 
         cwd = output.get_folder().to_str()
 
-        popen_args = dict(text=True, encoding='utf-8', shell=True, cwd=cwd)
-
-        subprocess.Popen(arguments, **popen_args).wait()
+        subprocess.Popen(arguments, text=True, encoding='utf-8', shell=True, cwd=cwd).wait()
 
     def get_out_folder(
         self, output_folder: SPathLike | Literal[False] | None = None, file: SPath | None = None
