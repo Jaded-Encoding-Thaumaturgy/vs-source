@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import vapoursynth as vs
 from typing import Callable, List
 
@@ -19,7 +20,7 @@ class DGIndex(DGIndexNV):
         vps_indexer: Callable[..., vs.VideoNode] | None = None, ext: str = 'dgi'
     ) -> None:
         super().__init__(path, vps_indexer or core.d2v.Source, ext)
-        print(RuntimeWarning("\n\tDGIndex is bugged, it will probably not work on your system/version.\n"))
+        logging.warning(RuntimeWarning("\n\tDGIndex is bugged, it will probably not work on your system/version.\n"))
 
     def get_cmd(
         self, files: List[SPath], output: SPath,

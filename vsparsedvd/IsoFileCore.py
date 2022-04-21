@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import vapoursynth as vs
 from io import BufferedReader
 from abc import abstractmethod
