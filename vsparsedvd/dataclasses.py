@@ -1,44 +1,52 @@
-from pathlib import Path
+from __future__ import annotations
+
 from fractions import Fraction
 from dataclasses import dataclass, field
-from typing import List, Optional, Tuple, Union
+from typing import List, Tuple, Union, NamedTuple
+
+from .utils.types import Matrix
+from .utils.spathlib import SPath
 
 
-@dataclass
-class IFOFileInfo:
-    chapters: List[List[int]]
+class _SetItemMeta:
+    def __setitem__(self, key: str, value: float | int) -> None:
+        return self.__setattr__(key, value)
+
+
+class IFOFileInfo(NamedTuple):
+    chapters: Matrix[int]
     fps: Fraction
     is_multiple_IFOs: bool
 
 
-@dataclass
-class IndexFileVideo:
-    path: Path
+class IndexFileVideo(NamedTuple):
+    path: SPath
     size: int
+    num_frames: int
 
 
 @dataclass
-class IndexFileFrameData:
+class IndexFileFrameData(_SetItemMeta):
     matrix: int
     pic_type: str
-    vob: Optional[int]
-    cell: Optional[int]
+    vob: int | None
+    cell: int | None
 
 
 @dataclass
-class __IndexFileInfoBase:
-    path: Path
+class _IndexFileInfoBase(_SetItemMeta):
+    path: SPath
     file_idx: int
     videos: List[IndexFileVideo]
 
 
 @dataclass
-class IndexFileInfo(__IndexFileInfoBase):
+class IndexFileInfo(_IndexFileInfoBase):
     frame_data: List[IndexFileFrameData]
 
 
 @dataclass
-class D2VIndexHeader:
+class D2VIndexHeader(_SetItemMeta):
     stream_type: int = 0
     MPEG_type: int = 0
     iDCT_algorithm: int = 0
@@ -50,7 +58,6 @@ class D2VIndexHeader:
     field_op: int = 0
     frame_rate: Fraction = Fraction(30000, 1001)
     location: List[int] = field(default_factory=lambda: [0, 0, 0, 0])
-    ffflength: int = -1
 
 
 @dataclass
@@ -61,7 +68,7 @@ class D2VIndexFrameData(IndexFileFrameData):
 
 
 @dataclass
-class DGIndexHeader:
+class DGIndexHeader(_SetItemMeta):
     device: int = 0
     decode_modes: List[int] = field(default_factory=lambda: [0, 0, 0, 0, 0])
     stream: Tuple[int, ...] = (1, 0)
@@ -69,8 +76,8 @@ class DGIndexHeader:
     depth: int = 8
     aspect: Fraction = Fraction(16, 9)
     colorimetry: Tuple[int, ...] = (2, 2, 2)
-    packet_size: Optional[int] = None
-    vpid: Optional[int] = None
+    packet_size: int | None = None
+    vpid: int | None = None
 
 
 @dataclass
@@ -79,7 +86,7 @@ class DGIndexFrameData(IndexFileFrameData):
 
 
 @dataclass
-class DGIndexFooter:
+class DGIndexFooter(_SetItemMeta):
     film: float = 0.0
     frames_coded: int = 0
     frames_playback: int = 0
@@ -87,13 +94,13 @@ class DGIndexFooter:
 
 
 @dataclass
-class D2VIndexFileInfo(__IndexFileInfoBase):
+class D2VIndexFileInfo(_IndexFileInfoBase):
     header: D2VIndexHeader
     frame_data: List[D2VIndexFrameData]
 
 
 @dataclass
-class DGIndexFileInfo(__IndexFileInfoBase):
+class DGIndexFileInfo(_IndexFileInfoBase):
     header: DGIndexHeader
     frame_data: List[DGIndexFrameData]
     footer: DGIndexFooter

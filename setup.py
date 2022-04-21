@@ -8,7 +8,7 @@ with open("README.md") as fh:
 with open("requirements.txt") as fh:
     install_requires = fh.read()
 
-name = "parsedvd"
+name = "vsparsedvd"
 version = "0.0.3"
 release = "0.0.3"
 
@@ -20,10 +20,10 @@ setuptools.setup(
     description="Vapoursynth Wrapper for DVDs stuff",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    packages=["parsedvd", "parsedvd.DVDIndexers"],
+    packages=["vsparsedvd", "vsparsedvd.utils", "vsparsedvd.DVDIndexers"],
     url="https://github.com/Setsugennoao/vs-parsedvd",
     package_data={
-        'parsedvd': ['py.typed'],
+        'vsparsedvd': ['py.typed'],
     },
     install_requires=install_requires,
     classifiers=[

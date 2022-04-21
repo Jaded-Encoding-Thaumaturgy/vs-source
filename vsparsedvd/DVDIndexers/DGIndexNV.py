@@ -1,17 +1,20 @@
+from __future__ import annotations
+
 import vapoursynth as vs
-from pathlib import Path
 from fractions import Fraction
-from typing import Callable, List, Union, Optional
+from typing import Callable, List, Sequence
 from functools import lru_cache, reduce as funcreduce
 
 
+from .DVDIndexer import DVDIndexer
+
+from ..utils.spathlib import SPath
+from ..utils.types import SPathLike
+from ..utils.utils import opt_int, opt_ints
 from ..dataclasses import (
     DGIndexFileInfo, DGIndexFooter,
     DGIndexHeader, DGIndexFrameData, IndexFileVideo
 )
-
-from .DVDIndexer import DVDIndexer
-from .utils import opt_int, opt_ints
 
 
 core = vs.core
@@ -21,15 +24,15 @@ class DGIndexNV(DVDIndexer):
     """Built-in DGIndexNV indexer"""
 
     def __init__(
-        self, path: Union[Path, str] = 'DGIndexNV',
-        vps_indexer: Optional[Callable[..., vs.VideoNode]] = None, ext: str = 'dgi'
+        self, path: SPathLike = 'DGIndexNV',
+        vps_indexer: Callable[..., vs.VideoNode] | None = None, ext: str = 'dgi'
     ) -> None:
         super().__init__(path, vps_indexer or core.dgdecodenv.DGSource, ext)
 
-    def get_cmd(self, files: List[Path], output: Path) -> List[str]:
-        return list(map(str, [self._check_path(), '-i', ','.join(map(str, files)), '-o', output, '-h']))
+    def get_cmd(self, files: List[SPath], output: SPath) -> List[str]:
+        return list(map(str, [self._get_bin_path(), '-i', f'"{",".join(map(str, files))}"', '-o', f'"{output}"', '-h']))
 
-    def update_idx_file(self, index_path: Path, filepaths: List[Path]) -> None:
+    def update_video_filenames(self, index_path: SPath, filepaths: List[SPath]) -> None:
         with open(index_path, 'r') as file:
             file_content = file.read()
 
@@ -43,29 +46,31 @@ class DGIndexNV(DVDIndexer):
         start_videos = lines.index('') + 1
         end_videos = lines.index('', start_videos)
 
-        if (n_files := end_videos - start_videos) != len(str_filepaths):
+        if end_videos - start_videos != len(str_filepaths):
             self.file_corrupted(index_path)
 
-        split_videos = [
-            [line[:-1], ' '.join(line[-1:])] for line in [
-                line.split(' ') for line in lines[start_videos:end_videos]
-            ]
+        split_lines = [
+            line.split(' ') for line in lines[start_videos:end_videos]
         ]
 
-        if [s[0] for s in split_videos] == str_filepaths:
+        current_paths = [line[:-1][0] for line in split_lines]
+
+        if current_paths == str_filepaths:
             return
 
+        video_args = [line[-1:] for line in split_lines]
+
         lines[start_videos:end_videos] = [
-            f"{filepaths[i]} {split_videos[i][1]}" for i in range(n_files)
+            ' '.join([path, *args]) for path, args in zip(str_filepaths, video_args)
         ]
 
         with open(index_path, 'w') as file:
             file.write('\n'.join(lines))
 
     @lru_cache
-    def get_info(self, index_path: Path, file_idx: int = 0) -> DGIndexFileInfo:
-        with index_path.open(mode="r", encoding="utf8") as f:
-            file_content = f.read()
+    def get_info(self, index_path: SPath, file_idx: int = -1) -> DGIndexFileInfo:
+        with open(index_path, 'r') as file:
+            file_content = file.read()
 
         lines = file_content.split('\n')
 
@@ -108,8 +113,8 @@ class DGIndexNV(DVDIndexer):
                 header.vpid = int(values[0])
 
         videos = [
-            IndexFileVideo(Path(' '.join(line[:-1])), int(line[-1]))
-            for line in map(lambda a: a.split(' '), vid_lines)
+            IndexFileVideo(SPath(' '.join(line[:-1])), int(line[-1]), 0)  # TODO
+            for line in [line.split(' ') for line in vid_lines]
         ]
 
         max_sector = funcreduce(lambda a, b: a + b, [v.size for v in videos[:file_idx + 1]], 0)
@@ -122,7 +127,7 @@ class DGIndexNV(DVDIndexer):
             if len(rawline) == 0:
                 break
 
-            line: List[Optional[str]] = [*rawline.split(" ", maxsplit=6), *([None] * 6)]
+            line: Sequence[str | None] = [*rawline.split(" ", maxsplit=6), *([None] * 6)]
 
             name = str(line[0])
 
@@ -161,6 +166,6 @@ class DGIndexNV(DVDIndexer):
                     else:
                         value = int(values[1])
 
-                    footer.__setattr__(key, value)
+                    footer[key] = value
 
         return DGIndexFileInfo(index_path, file_idx, videos, header, frame_data, footer)
