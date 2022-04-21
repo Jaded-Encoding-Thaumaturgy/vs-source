@@ -55,11 +55,13 @@ class DVDIndexer(ABC):
     def _run_index(self, files: List[SPath], output: SPath, cmd_args: Sequence[str]) -> None:
         output.mkdirp()
 
-        arguments = list(map(str, self.get_cmd(files, output))) + list(cmd_args)
+        status = subprocess.Popen(
+            list(map(str, self.get_cmd(files, output))) + list(cmd_args),
+            text=True, encoding='utf-8', shell=True, cwd=output.get_folder().to_str()
+        ).wait()
 
-        cwd = output.get_folder().to_str()
-
-        subprocess.Popen(arguments, text=True, encoding='utf-8', shell=True, cwd=cwd).wait()
+        if status:
+            raise RuntimeError(f"There was an error while running the {self.bin_path} command!")
 
     def get_out_folder(
         self, output_folder: SPathLike | Literal[False] | None = None, file: SPath | None = None
