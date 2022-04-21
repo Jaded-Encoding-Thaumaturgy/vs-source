@@ -20,7 +20,7 @@ setuptools.setup(
     description="Vapoursynth Wrapper for DVDs stuff",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    packages=["vsparsedvd", "vsparsedvd.DVDIndexers"],
+    packages=["vsparsedvd", "vsparsedvd.utils", "vsparsedvd.DVDIndexers"],
     url="https://github.com/Setsugennoao/vs-parsedvd",
     package_data={
         'vsparsedvd': ['py.typed'],
