@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import logging
 import vapoursynth as vs
-from typing import Callable, List
+from typing import Any, List
 
 from .DGIndexNV import DGIndexNV
 from ..utils.spathlib import SPath
-from ..utils.types import SPathLike
 
 
 core = vs.core
@@ -15,11 +14,14 @@ core = vs.core
 class DGIndex(DGIndexNV):
     """Built-in dgindex indexer"""
 
-    def __init__(
-        self, path: SPathLike = 'dgindex',
-        vps_indexer: Callable[..., vs.VideoNode] | None = None, ext: str = 'dgi'
-    ) -> None:
-        super().__init__(path, vps_indexer or core.d2v.Source, ext)
+    def __init__(self, **kwargs: Any) -> None:
+        if 'path' not in kwargs:
+            kwargs['bin_path'] = 'dgindex'
+        if 'vps_indexer' not in kwargs:
+            kwargs['vps_indexer'] = core.d2v.Source
+        if 'ext' not in kwargs:
+            kwargs['ext'] = 'dgi'
+        super().__init__(**kwargs)
         logging.warning(RuntimeWarning("\n\tDGIndex is bugged, it will probably not work on your system/version.\n"))
 
     def get_cmd(

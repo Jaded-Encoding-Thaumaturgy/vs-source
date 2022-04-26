@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import vapoursynth as vs
 from fractions import Fraction
-from typing import Callable, List, Sequence
+from typing import Any, List, Sequence
 from functools import lru_cache, reduce as funcreduce
 
 
 from .DVDIndexer import DVDIndexer
 
 from ..utils.spathlib import SPath
-from ..utils.types import SPathLike
 from ..utils.utils import opt_int, opt_ints
 from ..dataclasses import (
     DGIndexFileInfo, DGIndexFooter,
@@ -23,11 +22,14 @@ core = vs.core
 class DGIndexNV(DVDIndexer):
     """Built-in DGIndexNV indexer"""
 
-    def __init__(
-        self, path: SPathLike = 'DGIndexNV',
-        vps_indexer: Callable[..., vs.VideoNode] | None = None, ext: str = 'dgi'
-    ) -> None:
-        super().__init__(path, vps_indexer or core.dgdecodenv.DGSource, ext)
+    def __init__(self, **kwargs: Any) -> None:
+        if 'path' not in kwargs:
+            kwargs['bin_path'] = 'DGIndexNV'
+        if 'vps_indexer' not in kwargs:
+            kwargs['vps_indexer'] = core.dgdecodenv.DGSource
+        if 'ext' not in kwargs:
+            kwargs['ext'] = 'dgi'
+        super().__init__(**kwargs)
 
     def get_cmd(self, files: List[SPath], output: SPath) -> List[str]:
         return list(map(str, [self._get_bin_path(), '-i', f'"{",".join(map(str, files))}"', '-o', f'"{output}"', '-h']))

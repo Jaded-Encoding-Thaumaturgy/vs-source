@@ -5,7 +5,7 @@ import tempfile
 import vapoursynth as vs
 from fractions import Fraction
 from functools import lru_cache
-from typing import Callable, List, Literal
+from typing import Any, List, Literal
 
 
 from ..utils.spathlib import SPath
@@ -23,11 +23,14 @@ class D2VWitch(DVDIndexer):
 
     frame_lengths_key = "FilesFrameLengths"
 
-    def __init__(
-        self, path: SPathLike = 'd2vwitch',
-        vps_indexer: Callable[..., vs.VideoNode] | None = None, ext: str = 'd2v'
-    ) -> None:
-        super().__init__(path, vps_indexer or core.d2v.Source, ext)
+    def __init__(self, **kwargs: Any) -> None:
+        if 'path' not in kwargs:
+            kwargs['bin_path'] = 'd2vwitch'
+        if 'vps_indexer' not in kwargs:
+            kwargs['vps_indexer'] = core.d2v.Source
+        if 'ext' not in kwargs:
+            kwargs['ext'] = 'd2v'
+        super().__init__(**kwargs)
 
     def get_cmd(self, files: List[SPath], output: SPath) -> List[str]:
         return list(map(str, [self._get_bin_path(), *files, '--output', output]))
