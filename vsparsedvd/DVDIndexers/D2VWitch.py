@@ -73,9 +73,17 @@ class D2VWitch(DVDIndexer):
         vids_frame_lenghts = []
 
         for path in map(SPath, vid_lines):
-            temp_idx_files = self.index([path], True, True, tempfile.gettempdir())
+            temp_idx_files = self.index([path], True, False, tempfile.gettempdir(), False)[0].to_str()
 
-            vid_file = self.vps_indexer(temp_idx_files[0].to_str())
+            if path.to_str().lower().endswith('_0.vob'):
+                with open(temp_idx_files, 'r') as f:
+                    idx_file_content = f.read()
+
+                if len(idx_file_content.splitlines()) < 20:
+                    vids_frame_lenghts += [1]
+                    continue
+
+            vid_file = self.vps_indexer(temp_idx_files)
 
             vids_frame_lenghts += [vid_file.num_frames]
 
