@@ -18,19 +18,16 @@ core = vs.core
 
 class _WinIsoFile(IsoFileCore):
     def _run_disc_util(self, iso_path: SPath, util: str) -> SPath | None:
-        process = subprocess.Popen([
-            "PowerShell", fr'{util}-DiskImage -ImagePath "{str(iso_path)}" | Get-Volume | ConvertTo-Json'],
-            stdout=subprocess.PIPE
-        )
+        pbjson, err = subprocess.Popen([
+            'PowerShell', fr'{util}-DiskImage -ImagePath "{str(iso_path)}" | Get-Volume | ConvertTo-Json'
+        ], text=True, stdout=subprocess.PIPE, shell=True, encoding='utf-8').communicate()
 
-        pbjson, err = process.communicate()
-
-        if err or str(pbjson[:len(util)], 'utf8') == util or pbjson == b'':
+        if err or pbjson[:len(util)] == util or pbjson == '':
             return None
         elif util.lower() == "dismount":
             return SPath('')
 
-        bjson: dict[str, str] = json.loads(str(pbjson, 'utf-8'))
+        bjson: dict[str, str] = json.loads(pbjson)
 
         return SPath(f"{bjson['DriveLetter']}:\\")
 
