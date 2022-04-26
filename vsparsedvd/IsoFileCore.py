@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import datetime
 import vapoursynth as vs
 from abc import abstractmethod
 from fractions import Fraction
@@ -133,11 +134,39 @@ class IsoFileCore:
         return clip
 
     def __repr__(self) -> str:
-        return f"""
-        {self.__class__.__name__[1:]}:
-        \t Iso path: "{self.iso_path}"
-        \t Mount path: {self.mount_path}
-        """.strip().replace("        ", "")
+        to_print = f"""{self.__class__.__name__[1:]}:
+    Iso path: "{self.iso_path}"
+    Mount path: {self.mount_path}
+    IFO Info:
+        Titles:
+        """
+
+        ifo_info = self.get_ifo_info(self.mount_path)
+
+        for i, title in enumerate(ifo_info.chapters):
+            timestrings = list(map(lambda x: str(datetime.timedelta(seconds=round(x * ifo_info.fps / 1000))), title))
+
+            tmp = ''
+            timestring = ''
+
+            for j, v in enumerate(timestrings, 1):
+                tmp += f'{j-1}->{v}, '
+
+                if j % 7 == 0:
+                    timestring += f"\n{' ' * 20}{tmp}"
+                    tmp = ''
+
+            timestring += tmp
+
+            to_print += f"""    Title: {i}
+                Chapters: {timestring}
+        """
+
+        to_print += f"""FPS: {ifo_info.fps}
+        Multiple IFOs: {ifo_info.is_multiple_IFOs}
+        """
+
+        return to_print.strip()
 
     def _mount_folder_path(self) -> SPath:
         if self.force_root:
