@@ -23,7 +23,7 @@ class DGIndexNV(DVDIndexer):
     """Built-in DGIndexNV indexer"""
 
     def __init__(self, **kwargs: Any) -> None:
-        if 'path' not in kwargs:
+        if 'bin_path' not in kwargs:
             kwargs['bin_path'] = 'DGIndexNV'
         if 'vps_indexer' not in kwargs:
             kwargs['vps_indexer'] = core.dgdecodenv.DGSource

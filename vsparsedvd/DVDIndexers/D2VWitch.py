@@ -24,7 +24,7 @@ class D2VWitch(DVDIndexer):
     frame_lengths_key = "FilesFrameLengths"
 
     def __init__(self, **kwargs: Any) -> None:
-        if 'path' not in kwargs:
+        if 'bin_path' not in kwargs:
             kwargs['bin_path'] = 'd2vwitch'
         if 'vps_indexer' not in kwargs:
             kwargs['vps_indexer'] = core.d2v.Source
