@@ -1,2 +1,2 @@
-VapourSynth>=51
+VapourSynth>=59
 pyparsedvd>=0.0.3
