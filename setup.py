@@ -2,11 +2,10 @@
 
 import setuptools
 from pathlib import Path
-from runpy import run_path
 
 package_name = 'vsparsedvd'
 
-run_path(f'{package_name}/_metadata.py', meta := dict[str, str]())
+exec(Path(f'{package_name}/_metadata.py').read_text(), meta := dict[str, str]())
 
 readme = Path('README.md').read_text()
 requirements = Path('requirements.txt').read_text()

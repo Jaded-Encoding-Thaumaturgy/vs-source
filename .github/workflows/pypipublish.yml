@@ -23,7 +23,7 @@ jobs:
         - name: Build wheel
           id: wheel
           run: |
-              python setup.py bdist_wheel
+              python -m build --wheel --outdir dist/
           continue-on-error: true
         - name: Build source distribution
           id: sdist
