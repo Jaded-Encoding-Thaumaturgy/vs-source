@@ -17,10 +17,16 @@ setuptools.setup(
     version=meta['__version__'],
     author=meta['__author_name__'],
     author_email=meta['__author_email__'],
+    maintainer=meta['__maintainer_name__'],
+    maintainer_email=meta['__maintainer_email__'],
     description=meta['__doc__'],
     long_description=readme,
     long_description_content_type='text/markdown',
-    url='https://github.com/Irrational-Encoding-Wizardry/vs-parsedvd',
+    project_urls={
+        'Source Code': 'https://github.com/Irrational-Encoding-Wizardry/vs-parsedvd',
+        'Documentation': 'https://vsparsedvd.encode.moe/en/latest/',
+        'Contact': 'https://discord.gg/qxTxVJGtst',
+    },
     install_requires=requirements,
     python_requires='>=3.10',
     packages=[
