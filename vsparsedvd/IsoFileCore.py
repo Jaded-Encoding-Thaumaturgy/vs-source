@@ -50,6 +50,7 @@ class IsoFileCore:
 
     def get_ifo_info(self, mount_path: SPath) -> IFOFileInfo:
         ifo_hash = hash(mount_path)
+
         if ifo_hash in self._ifo_info:
             return self._ifo_info[ifo_hash]
 

@@ -154,7 +154,7 @@ class DVDIndexer(ABC):
         return md5(to_hash).hexdigest()
 
     def source(
-        self, file: SPath, force: bool = False, output_folder: SPathLike | Literal[False] | None = None,
+        self, file: str | SPath, force: bool = False, output_folder: SPathLike | Literal[False] | None = None,
         single_input: bool = True, *indexer_args: str, **vps_indexer_kwargs: Any
     ) -> vs.VideoNode:
         return core.std.Splice([
