@@ -32,7 +32,13 @@ class DGIndexNV(DVDIndexer):
         super().__init__(**kwargs)
 
     def get_cmd(self, files: List[SPath], output: SPath) -> List[str]:
-        return list(map(str, [self._get_bin_path(), '-i', f'"{",".join(map(str, files))}"', '-o', f'"{output}"', '-h']))
+        return list(
+            map(str, [
+                self._get_bin_path(), '-i',
+                ','.join([f'"{str(path)}"' for path in files]),
+                '-o', f'"{output}"', '-h'
+            ])
+        )
 
     def update_video_filenames(self, index_path: SPath, filepaths: List[SPath]) -> None:
         with open(index_path, 'r') as file:
