@@ -30,19 +30,6 @@ class DGIndexNV(ExternalIndexer):
             ])
         )
 
-    def _run_index(self, files: list[SPath], output: SPath, cmd_args: Sequence[str]) -> None:
-        output.mkdirp()
-
-        print(list(map(str, self.get_cmd(files, output))) + list(cmd_args))
-
-        status = subprocess.Popen(
-            list(map(str, self.get_cmd(files, output))) + list(cmd_args),
-            stdout=subprocess.DEVNULL, shell=True, cwd=output.get_folder().to_str()
-        ).wait()
-
-        if status:
-            raise RuntimeError(f"There was an error while running the {self.bin_path} command!")
-
     def update_video_filenames(self, index_path: SPath, filepaths: list[SPath]) -> None:
         lines = index_path.read_lines()
 

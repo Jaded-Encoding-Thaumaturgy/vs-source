@@ -100,7 +100,7 @@ class ExternalIndexer(Indexer):
     _bin_path: ClassVar[str]
     _ext: ClassVar[str]
 
-    _default_args: ClassVar[tuple[str, ...]]
+    _default_args: ClassVar[tuple[str, ...]] = ()
 
     def __init__(
         self, *, bin_path: SPathLike | MissingT = MISSING, ext: str | MissingT = MISSING,
