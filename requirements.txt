@@ -1,2 +1,2 @@
-VapourSynth>=59
-pyparsedvd>=0.0.3
+VapourSynth>=60
+vstools>=2.1.0

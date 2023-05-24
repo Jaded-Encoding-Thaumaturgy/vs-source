@@ -1,50 +1,50 @@
 from __future__ import annotations
 
-import vapoursynth as vs
+import subprocess
 from fractions import Fraction
-from typing import Any, List, Sequence
-from functools import lru_cache, reduce as funcreduce
+from functools import lru_cache, reduce
+from typing import Sequence
+
+from vstools import SPath, core
+
+from ..dataclasses import DGIndexFileInfo, DGIndexFooter, DGIndexFrameData, DGIndexHeader, IndexFileVideo
+from ..utils import opt_int, opt_ints
+from .base import ExternalIndexer
+
+__all__ = [
+    'DGIndexNV'
+]
 
 
-from .DVDIndexer import DVDIndexer
+class DGIndexNV(ExternalIndexer):
+    _bin_path = 'DGIndexNV'
+    _ext = 'dgi'
+    _source_func = core.lazy.dgdecodenv.DGSource
 
-from ..utils.spathlib import SPath
-from ..utils.utils import opt_int, opt_ints
-from ..dataclasses import (
-    DGIndexFileInfo, DGIndexFooter,
-    DGIndexHeader, DGIndexFrameData, IndexFileVideo
-)
-
-
-core = vs.core
-
-
-class DGIndexNV(DVDIndexer):
-    """Built-in DGIndexNV indexer"""
-
-    def __init__(self, **kwargs: Any) -> None:
-        if 'bin_path' not in kwargs:
-            kwargs['bin_path'] = 'DGIndexNV'
-        if 'vps_indexer' not in kwargs:
-            kwargs['vps_indexer'] = core.dgdecodenv.DGSource
-        if 'ext' not in kwargs:
-            kwargs['ext'] = 'dgi'
-        super().__init__(**kwargs)
-
-    def get_cmd(self, files: List[SPath], output: SPath) -> List[str]:
+    def get_cmd(self, files: list[SPath], output: SPath) -> list[str]:
         return list(
             map(str, [
                 self._get_bin_path(), '-i',
-                ','.join([f'"{str(path)}"' for path in files]),
-                '-o', f'"{output}"', '-h'
+                ','.join(str(path) for path in files),
+                '-h', '-o', output, '-e'
             ])
         )
 
-    def update_video_filenames(self, index_path: SPath, filepaths: List[SPath]) -> None:
-        with open(index_path, 'r') as file:
-            file_content = file.read()
+    def _run_index(self, files: list[SPath], output: SPath, cmd_args: Sequence[str]) -> None:
+        output.mkdirp()
 
-        lines = file_content.split('\n')
+        print(list(map(str, self.get_cmd(files, output))) + list(cmd_args))
+
+        status = subprocess.Popen(
+            list(map(str, self.get_cmd(files, output))) + list(cmd_args),
+            stdout=subprocess.DEVNULL, shell=True, cwd=output.get_folder().to_str()
+        ).wait()
+
+        if status:
+            raise RuntimeError(f"There was an error while running the {self.bin_path} command!")
+
+    def update_video_filenames(self, index_path: SPath, filepaths: list[SPath]) -> None:
+        lines = index_path.read_lines()
 
         str_filepaths = list(map(str, filepaths))
 
@@ -72,8 +72,7 @@ class DGIndexNV(DVDIndexer):
             ' '.join([path, *args]) for path, args in zip(str_filepaths, video_args)
         ]
 
-        with open(index_path, 'w') as file:
-            file.write('\n'.join(lines))
+        index_path.write_lines(lines)
 
     @lru_cache
     def get_info(self, index_path: SPath, file_idx: int = -1) -> DGIndexFileInfo:
@@ -95,7 +94,7 @@ class DGIndexNV(DVDIndexer):
         for rlin in raw_header:
             if split_val := rlin.rstrip().split(' '):
                 key: str = split_val[0].upper()
-                values: List[str] = split_val[1:]
+                values: list[str] = split_val[1:]
             else:
                 continue
 
@@ -125,7 +124,7 @@ class DGIndexNV(DVDIndexer):
             for line in [line.split(' ') for line in vid_lines]
         ]
 
-        max_sector = funcreduce(lambda a, b: a + b, [v.size for v in videos[:file_idx + 1]], 0)
+        max_sector = reduce(lambda a, b: a + b, [v.size for v in videos[:file_idx + 1]], 0)
 
         idx_file_sector = [max_sector - videos[file_idx].size, max_sector]
 

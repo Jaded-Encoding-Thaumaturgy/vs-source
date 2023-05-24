@@ -3,7 +3,7 @@
 import setuptools
 from pathlib import Path
 
-package_name = 'vsparsedvd'
+package_name = 'vssource'
 
 exec(Path(f'{package_name}/_metadata.py').read_text(), meta := dict[str, str]())
 
@@ -22,15 +22,13 @@ setuptools.setup(
     long_description=readme,
     long_description_content_type='text/markdown',
     project_urls={
-        'Source Code': 'https://github.com/Irrational-Encoding-Wizardry/vs-parsedvd',
-        'Documentation': 'https://vsparsedvd.encode.moe/en/latest/',
+        'Source Code': 'https://github.com/Irrational-Encoding-Wizardry/vs-source',
+        'Documentation': 'https://vssource.encode.moe/en/latest/',
         'Contact': 'https://discord.gg/qxTxVJGtst',
     },
     install_requires=requirements,
     python_requires='>=3.10',
-    packages=[
-        package_name, f'{package_name}.utils', f'{package_name}.DVDIndexers'
-    ],
+    packages=setuptools.find_packages(package_name),
     package_data={
         package_name: ['py.typed']
     },

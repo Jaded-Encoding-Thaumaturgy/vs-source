@@ -25,7 +25,7 @@ jobs:
           pip install -r requirements.txt
           pip install -r requirements-dev.txt
       - name: Running flake8
-        run: flake8 vsparsedvd
+        run: flake8 vssource
       - name: Running mypy
         if: steps.dependencies.outcome == 'success'
-        run: mypy vsparsedvd
+        run: mypy vssource

@@ -2,40 +2,32 @@ from __future__ import annotations
 
 import re
 import tempfile
-import vapoursynth as vs
 from fractions import Fraction
 from functools import lru_cache
-from typing import Any, List, Literal
 
+from vstools import SPath, core
 
-from ..utils.spathlib import SPath
-from ..utils.types import SPathLike
 from ..dataclasses import D2VIndexFileInfo, D2VIndexFrameData, D2VIndexHeader, IndexFileVideo
+from .base import ExternalIndexer
 
-from .DVDIndexer import DVDIndexer
+__all__ = [
+    'D2VWitch'
+]
 
 
-core = vs.core
-
-
-class D2VWitch(DVDIndexer):
-    """Built-in d2vwitch indexer"""
-
+class D2VWitch(ExternalIndexer):
     frame_lengths_key = "FilesFrameLengths"
 
-    def __init__(self, **kwargs: Any) -> None:
-        if 'bin_path' not in kwargs:
-            kwargs['bin_path'] = 'd2vwitch'
-        if 'vps_indexer' not in kwargs:
-            kwargs['vps_indexer'] = core.d2v.Source
-        if 'ext' not in kwargs:
-            kwargs['ext'] = 'd2v'
-        super().__init__(**kwargs)
+    _bin_path = 'd2vwitch'
+    _ext = 'd2v'
+    _source_func = core.lazy.d2v.Source
 
-    def get_cmd(self, files: List[SPath], output: SPath) -> List[str]:
+    _default_args = ('--single-input', )
+
+    def get_cmd(self, files: list[SPath], output: SPath) -> list[str]:
         return list(map(str, [self._get_bin_path(), *files, '--output', output]))
 
-    def update_video_filenames(self, index_path: SPath, filepaths: List[SPath]) -> None:
+    def update_video_filenames(self, index_path: SPath, filepaths: list[SPath]) -> None:
         with open(index_path, 'r') as file:
             file_content = file.read()
 
@@ -59,7 +51,7 @@ class D2VWitch(DVDIndexer):
         with open(index_path, 'w') as file:
             file.write('\n'.join(lines))
 
-    def write_idx_file_videoslength(self, index_path: SPath) -> List[int]:
+    def write_idx_file_videoslength(self, index_path: SPath) -> list[int]:
         with open(index_path, 'r') as f:
             file_content = f.read()
 
@@ -76,7 +68,7 @@ class D2VWitch(DVDIndexer):
         vids_frame_lenghts = []
 
         for path in map(SPath, vid_lines):
-            temp_idx_files = self.index([path], True, False, tempfile.gettempdir(), False)[0].to_str()
+            temp_idx_files = self.index([path], True, False, tempfile.gettempdir())[0].to_str()
 
             if path.to_str().lower().endswith('_0.vob'):
                 with open(temp_idx_files, 'r') as f:
@@ -86,7 +78,7 @@ class D2VWitch(DVDIndexer):
                     vids_frame_lenghts += [1]
                     continue
 
-            vid_file = self.vps_indexer(temp_idx_files)
+            vid_file = self.source_func(temp_idx_files)
 
             vids_frame_lenghts += [vid_file.num_frames]
 
@@ -123,7 +115,7 @@ class D2VWitch(DVDIndexer):
         for rlin in raw_header:
             if split_val := rlin.rstrip().split('='):
                 key: str = split_val[0].upper()
-                values: List[str] = ','.join(split_val[1:]).split(',')
+                values: list[str] = ','.join(split_val[1:]).split(',')
             else:
                 continue
 
@@ -184,9 +176,3 @@ class D2VWitch(DVDIndexer):
                 ))
 
         return D2VIndexFileInfo(index_path, file_idx, videos, header, frame_data)
-
-    def index(
-        self, files: List[SPath], force: bool = False, split_files: bool = False,
-        output_folder: SPathLike | Literal[False] | None = None, single_input: bool = False, *cmd_args: str
-    ) -> List[SPath]:
-        return super().index(files, force, split_files, output_folder, single_input, *cmd_args, '--single-input')

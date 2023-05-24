@@ -1,34 +1,32 @@
 from __future__ import annotations
 
-import logging
 import datetime
-import vapoursynth as vs
+import logging
 from abc import abstractmethod
 from fractions import Fraction
-from pyparsedvd import vts_ifo
 from itertools import accumulate
-from typing import List, Tuple, cast, Dict
+from typing import cast
 
-from .utils.types import Range
-from .utils.spathlib import SPath
-from .DVDIndexers import D2VWitch, DVDIndexer
-from .dataclasses import D2VIndexFileInfo, DGIndexFileInfo, IFOFileInfo, IndexFileType
+from vstools import CustomValueError, FrameRangeN, FrameRangesN, SPath, vs
 
-core = vs.core
+from ...dataclasses import D2VIndexFileInfo, DGIndexFileInfo, IFOFileInfo, IndexFileType
+from ...indexers import D2VWitch, ExternalIndexer
+from .parsedvd import VTS_FRAMERATE, VTSPGCI
 
 
 class IsoFileCore:
     _subfolder = "VIDEO_TS"
 
     def __init__(
-        self, path: SPath, indexer: DVDIndexer = D2VWitch(), safe_indices: bool = False, force_root: bool = False
+        self, path: SPath, indexer: ExternalIndexer | type[ExternalIndexer] = D2VWitch,
+        safe_indices: bool = False, force_root: bool = False
     ):
         self.iso_path = SPath(path).absolute()
 
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
-            raise ValueError("IsoFile: path needs to point to a .ISO or a dir root of DVD")
+            raise CustomValueError('"path" needs to point to a .ISO or a dir root of DVD', self.__class__)
 
-        self.indexer = indexer
+        self.indexer = indexer if isinstance(indexer, ExternalIndexer) else indexer()
         self.safe_indices = safe_indices
         self.force_root = force_root
 
@@ -36,11 +34,11 @@ class IsoFileCore:
         self._idx_path: SPath | None = None
         self._mount_path: SPath | None = None
         self._clip: vs.VideoNode | None = None
-        self._vob_files: List[SPath] | None = None
-        self._index_info: Dict[int, IndexFileType] = {}
-        self._ifo_info: Dict[int, IFOFileInfo] = {}
+        self._vob_files: list[SPath] | None = None
+        self._index_info: dict[int, IndexFileType] = {}
+        self._ifo_info: dict[int, IFOFileInfo] = {}
         # Split Clips, Split Chapters, Joined Clip, Joined Chapters
-        self._processed_titles: Tuple[List[vs.VideoNode], List[List[int]], vs.VideoNode, List[int]] | None = None
+        self._processed_titles: tuple[list[vs.VideoNode], list[list[int]], vs.VideoNode, list[int]] | None = None
 
     def get_idx_info(self, index: int = 0) -> D2VIndexFileInfo | DGIndexFileInfo:
         if index not in self._index_info:
@@ -61,20 +59,18 @@ class IsoFileCore:
         m_ifos = len(ifo_files) > 1
 
         for ifo_file in ifo_files:
-            with open(ifo_file, 'rb') as file:
-                curr_pgci = vts_ifo.load_vts_pgci(file)
-                program_chains += curr_pgci.program_chains[int(m_ifos):]
+            program_chains += VTSPGCI(ifo_file).program_chains[int(m_ifos):]
 
-        split_chapters: List[List[int]] = []
+        split_chapters: list[list[int]] = []
 
         fps = Fraction(30000, 1001)
 
         for prog in program_chains:
             dvd_fps_s = [pb_time.fps for pb_time in prog.playback_times]
             if all(dvd_fps_s[0] == dvd_fps for dvd_fps in dvd_fps_s):
-                fps = vts_ifo.FRAMERATE[dvd_fps_s[0]]
+                fps = VTS_FRAMERATE[dvd_fps_s[0]]
             else:
-                raise ValueError('IsoFile: No VFR allowed!')
+                raise CustomValueError('No VFR allowed!', self.__class__)
 
             raw_fps = 30 if fps.numerator == 30000 else 25
 
@@ -90,8 +86,8 @@ class IsoFileCore:
         return self._ifo_info[ifo_hash]
 
     def get_title(
-        self, clip_index: int | None = None, chapters: Range | List[Range] | None = None
-    ) -> vs.VideoNode | List[vs.VideoNode]:
+        self, clip_index: int | None = None, chapters: FrameRangeN | FrameRangesN = None
+    ) -> vs.VideoNode | list[vs.VideoNode]:
         clip, ranges = self.split_titles[clip_index] if clip_index is not None else self.joined_titles
         rlength = len(ranges)
 
@@ -179,8 +175,8 @@ class IsoFileCore:
         return self.iso_path / self._subfolder
 
     def _split_chapters_clips(
-        self, split_chapters: List[List[int]], dvd_menu_length: int
-    ) -> Tuple[List[List[int]], List[vs.VideoNode]]:
+        self, split_chapters: list[list[int]], dvd_menu_length: int
+    ) -> tuple[list[list[int]], list[vs.VideoNode]]:
         durations = list(accumulate([0] + [frame[-1] for frame in split_chapters]))
 
         # Remove splash screen and DVD Menu
@@ -196,8 +192,8 @@ class IsoFileCore:
         return split_chapters, clips
 
     def _join_chapters_clips(
-        self, split_chapters: List[List[int]], split_clips: List[vs.VideoNode]
-    ) -> Tuple[List[int], vs.VideoNode]:
+        self, split_chapters: list[list[int]], split_clips: list[vs.VideoNode]
+    ) -> tuple[list[int], vs.VideoNode]:
         joined_chapters = split_chapters[0]
         joined_clip = split_clips[0]
 
@@ -213,7 +209,7 @@ class IsoFileCore:
 
         return joined_chapters, joined_clip
 
-    def _process_titles(self) -> Tuple[List[vs.VideoNode], List[List[int]], vs.VideoNode, List[int]]:
+    def _process_titles(self) -> tuple[list[vs.VideoNode], list[list[int]], vs.VideoNode, list[int]]:
         ifo_info = self.get_ifo_info(self.mount_path)
 
         idx_info = self.get_idx_info(0)
@@ -245,7 +241,7 @@ class IsoFileCore:
             return _split_clips, _split_chapters, _joined_clip, _joined_chapters
 
         offset = 0
-        split_chapters: List[List[int]] = [[] for _ in range(len(_split_chapters))]
+        split_chapters: list[list[int]] = [[] for _ in range(len(_split_chapters))]
 
         for i in range(len(_split_chapters)):
             for j in range(len(_split_chapters[i])):
@@ -294,7 +290,7 @@ class IsoFileCore:
         return self._mount_path
 
     @property
-    def vob_files(self) -> List[SPath]:
+    def vob_files(self) -> list[SPath]:
         if self._vob_files is not None:
             return self._vob_files
 
@@ -335,7 +331,7 @@ class IsoFileCore:
 
         ifo_info = self.get_ifo_info(self.mount_path)
 
-        self._clip = self.indexer.vps_indexer(
+        self._clip = self.indexer.source_func(
             self.idx_path, **indexer_kwargs
         ).std.AssumeFPS(
             None, ifo_info.fps.numerator, ifo_info.fps.denominator
@@ -344,14 +340,14 @@ class IsoFileCore:
         return self._clip
 
     @property
-    def split_titles(self) -> List[Tuple[vs.VideoNode, List[int]]]:
+    def split_titles(self) -> list[tuple[vs.VideoNode, list[int]]]:
         if self._processed_titles is None:
             self._processed_titles = self._process_titles()
 
         return list(zip(*self._processed_titles[:2]))
 
     @property
-    def joined_titles(self) -> Tuple[vs.VideoNode, List[int]]:
+    def joined_titles(self) -> tuple[vs.VideoNode, list[int]]:
         if self._processed_titles is None:
             self._processed_titles = self._process_titles()
 

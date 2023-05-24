@@ -1,4 +1,4 @@
-# vs-parsedvd
+# vs-source
 
 ### DVDs were an error.
 <br>
@@ -9,16 +9,16 @@ You can find me in the [IEW Discord server](https://discord.gg/qxTxVJGtst), @Set
 <br><br>
 ## How to install
 
-Install `vsparsedvd` with the following command:
+Install `vssource` with the following command:
 
 ```sh
-$ pip install vsparsedvd
+$ pip install vssource
 ```
 
 Or if you want the latest git version, install it with this command:
 
 ```sh
-$ pip install git+https://github.com/Irrational-Encoding-Wizardry/vs-parsedvd.git
+$ pip install git+https://github.com/Irrational-Encoding-Wizardry/vs-source.git
 ```
 <br>
 
@@ -27,7 +27,7 @@ $ pip install git+https://github.com/Irrational-Encoding-Wizardry/vs-parsedvd.gi
 After installation, functions can be loaded and used as follows:
 
 ```py
-from vsparsedvd import IsoFile, DGIndexNV
+from vssource import IsoFile, DGIndexNV
 
 # Indexing with D2VWitch
 haruhi = IsoFile(r".\Suzumiya_2009_DVD\KABA_6001.ISO")

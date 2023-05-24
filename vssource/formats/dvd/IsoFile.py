@@ -1,30 +1,32 @@
 from __future__ import annotations
 
-import json
 import atexit
+import json
+import os
 import subprocess
-import vapoursynth as vs
 from os import name as os_name
-from typing import List, Any
+from typing import Any
 
-from .utils.spathlib import SPath
+from vstools import SPath
 
 from .IsoFileCore import IsoFileCore
 
-__all__ = ['IsoFile']
-
-core = vs.core
+__all__ = [
+    'IsoFile'
+]
 
 
 class _WinIsoFile(IsoFileCore):
     def _run_disc_util(self, iso_path: SPath, util: str) -> SPath | None:
         pbjson, err = subprocess.Popen([
-            'PowerShell', fr'{util}-DiskImage -ImagePath "{str(iso_path)}" | Get-Volume | ConvertTo-Json'
+            SPath(os.environ['WINDIR']) / 'System32' / 'WindowsPowerShell' / 'v1.0' / 'PowerShell.exe',
+            fr'{util}-DiskImage -ImagePath "{str(iso_path)}" | Get-Volume | ConvertTo-Json'
         ], text=True, stdout=subprocess.PIPE, shell=True, encoding='utf-8').communicate()
 
         if err or pbjson[:len(util)] == util or pbjson == '':
             return None
-        elif util.lower() == "dismount":
+
+        if util.lower() == "dismount":
             return SPath('')
 
         bjson: dict[str, str] = json.loads(pbjson)
@@ -62,7 +64,7 @@ class _LinuxIsoFile(IsoFileCore):
 
         return self.cur_mount
 
-    def _run_disc_util(self, path: SPath, params: List[str], strip: bool = False) -> str:
+    def _run_disc_util(self, path: SPath, params: list[str], strip: bool = False) -> str:
         output = self._subprun("udisksctl", *params, str(path))
 
         return output.strip() if strip else output
@@ -96,4 +98,4 @@ class _LinuxIsoFile(IsoFileCore):
         return bool(self._run_disc_util(self.loop_path, ["loop-delete", "-b", ]))
 
 
-IsoFile = _WinIsoFile if os_name == 'nt' else _LinuxIsoFile
+IsoFile: type[IsoFileCore] = _WinIsoFile if os_name == 'nt' else _LinuxIsoFile  # type: ignore
