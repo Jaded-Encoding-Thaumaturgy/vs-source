@@ -80,7 +80,7 @@ class Indexer(ABC):
 
     @inject_self
     def source(
-        self, file: SPathLike,
+        self, file: SPathLike | Sequence[SPathLike],
         bits: int | None = None, *,
         matrix: MatrixT | None = None,
         transfer: TransferT | None = None,
@@ -91,7 +91,7 @@ class Indexer(ABC):
         **kwargs: Any
     ) -> vs.VideoNode:
         return self._source(
-            [self.source_func(SPath(file).to_str(), **kwargs)],
+            [self.source_func(SPath(f).to_str(), **kwargs) for f in to_arr(file)],  # type: ignore
             bits, matrix, transfer, primaries, chroma_location, color_range, field_based
         )
 
@@ -189,7 +189,7 @@ class ExternalIndexer(Indexer):
             raise CustomRuntimeError("Index file corrupted! Delete it and retry.", self.__class__)
 
     def index(
-        self, files: SPath | list[SPath], force: bool = False, split_files: bool = False,
+        self, files: Sequence[SPath], force: bool = False, split_files: bool = False,
         output_folder: SPathLike | Literal[False] | None = None, *cmd_args: str
     ) -> list[SPath]:
         files = to_arr(files)
@@ -239,7 +239,7 @@ class ExternalIndexer(Indexer):
 
     @inject_self
     def source(  # type: ignore
-        self, file: SPathLike,
+        self, file: SPathLike | Sequence[SPathLike],
         bits: int | None = None, *,
         matrix: MatrixT | None = None,
         transfer: TransferT | None = None,
@@ -249,7 +249,7 @@ class ExternalIndexer(Indexer):
         field_based: FieldBasedT | None = None,
         **kwargs: Any
     ) -> vs.VideoNode:
-        index_files = self.index(SPath(file))
+        index_files = self.index([SPath(f) for f in to_arr(file)])  # type: ignore
 
         return self._source(
             (self.source_func(idx_filename.to_str(), **kwargs) for idx_filename in index_files),
