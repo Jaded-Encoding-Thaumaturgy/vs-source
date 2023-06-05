@@ -1,0 +1,108 @@
+from __future__ import annotations
+
+from typing import Any, Literal, Sequence
+
+from vstools import (
+    ChromaLocationT, ColorRangeT, CustomRuntimeError, FieldBasedT, FileType, FileTypeMismatchError, IndexingType,
+    MatrixT, PrimariesT, SPathLike, TransferT, check_perms, initialize_clip, match_clip, vs
+)
+
+from .indexers import IMWRI, LSMAS, BestSource, D2VWitch, DGIndex, DGIndexNV, Indexer
+
+
+def source(
+    filepath: SPathLike | Sequence[SPathLike],
+    bits: int | None = None, *,
+    matrix: MatrixT | None = None,
+    transfer: TransferT | None = None,
+    primaries: PrimariesT | None = None,
+    chroma_location: ChromaLocationT | None = None,
+    color_range: ColorRangeT | None = None,
+    field_based: FieldBasedT | None = None,
+    ref: vs.VideoNode | None = None,
+    film_thr: float = 99.0,
+    name: str | Literal[False] = False,
+    **kwargs: Any
+) -> vs.VideoNode:
+    clip = None
+    film_thr = float(min(100, film_thr))
+
+    filepath = next(iter(Indexer.normalize_filenames(filepath)))
+    check_perms(filepath, 'r', func=source)
+
+    file = FileType.parse(filepath) if filepath.exists() else None
+
+    def _check_file_type(file_type: FileType) -> bool:
+        return file_type in (FileType.VIDEO, FileType.IMAGE) or file_type.is_index  # type: ignore
+
+    if not file or not _check_file_type(FileType(file.file_type)):
+        for itype in IndexingType:
+            if (newpath := filepath.with_suffix(f'{filepath.suffix}{itype.value}')).exists():
+                file = FileType.parse(newpath)
+
+    if not file or not _check_file_type(FileType(file.file_type)):
+        raise FileTypeMismatchError('File isn\'t a video or image file!', source)
+
+    props = dict[str, Any]()
+
+    if file.ext is IndexingType.LWI:
+        clip = LSMAS.source_func(str(filepath), **kwargs)
+    elif file.file_type is FileType.IMAGE:
+        clip = IMWRI.source_func(str(filepath), **kwargs)
+    else:
+        try:
+            indexer = DGIndexNV()
+
+            if filepath.suffix != ".dgi":
+                filepath = next(iter(indexer.index([filepath], False, False)))
+
+            idx_info = indexer.get_info(filepath, 0).footer
+
+            props |= dict(dgi_fieldop=0, dgi_order=idx_info.order, dgi_film=idx_info.film)
+
+            indexer_kwargs = dict[str, Any]()
+            if idx_info.film >= film_thr:
+                indexer_kwargs |= dict(fieldop=1)
+                props |= dict(dgi_fieldop=1, _FieldBased=0)
+
+            clip = indexer.source_func(filepath, **indexer_kwargs)
+        except RuntimeError:
+            indexers = list[type[Indexer]]([LSMAS, D2VWitch, DGIndex])
+
+            try:
+                from vspreview import is_preview
+
+                best_last = is_preview()
+            except BaseException:
+                best_last = False
+
+            if best_last:
+                indexers.append(BestSource)
+            else:
+                indexers.insert(0, BestSource)
+
+            for indexerr in indexers:
+                try:
+                    clip = indexerr.source(filepath)
+                    break
+                except Exception:
+                    ...
+
+    if clip is None:
+        raise CustomRuntimeError(f'None of the indexers you have installed work on this file! "{filepath}"')
+
+    props |= dict(idx_filepath=str(filepath))
+
+    if name:
+        props |= dict(Name=name)
+
+    clip = clip.std.SetFrameProps(**props)
+
+    if ref:
+        clip = match_clip(clip, ref, length=file.file_type is FileType.IMAGE)
+
+    return initialize_clip(
+        clip, bits, matrix=matrix, transfer=transfer,
+        primaries=primaries, chroma_location=chroma_location,
+        color_range=color_range, field_based=field_based
+    )
