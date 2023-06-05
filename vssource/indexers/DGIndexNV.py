@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import subprocess
 from fractions import Fraction
 from functools import lru_cache, reduce
 from typing import Sequence

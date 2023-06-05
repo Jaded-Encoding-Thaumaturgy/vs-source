@@ -53,9 +53,21 @@ class Indexer(ABC):
         to_hash = lenght.to_bytes(32, 'little') + cls.get_joined_names(files).encode()
         return md5(to_hash).hexdigest()
 
-    @property
-    def source_func(self) -> VSSourceFunc:
-        return self._source_func
+    @classmethod
+    def source_func(self, path: DataType | SPathLike, *args: Any, **kwargs: Any) -> vs.VideoNode:
+        return self._source_func(str(path), *args, **kwargs)
+
+    @classmethod
+    def normalize_filenames(cls, file: SPathLike | Sequence[SPathLike]) -> list[SPath]:
+        files = list[SPath]()
+
+        for f in to_arr(file):  # type: ignore
+            if str(f).startswith('file:///'):
+                f = str(f)[8::]  # type: ignore
+
+            files.append(SPath(f))
+
+        return files
 
     def _source(
         self, clips: Iterable[vs.VideoNode],
@@ -91,7 +103,7 @@ class Indexer(ABC):
         **kwargs: Any
     ) -> vs.VideoNode:
         return self._source(
-            [self.source_func(SPath(f).to_str(), **kwargs) for f in to_arr(file)],  # type: ignore
+            [self.source_func(f.to_str(), **kwargs) for f in self.normalize_filenames(file)],
             bits, matrix, transfer, primaries, chroma_location, color_range, field_based
         )
 
@@ -249,7 +261,7 @@ class ExternalIndexer(Indexer):
         field_based: FieldBasedT | None = None,
         **kwargs: Any
     ) -> vs.VideoNode:
-        index_files = self.index([SPath(f) for f in to_arr(file)])  # type: ignore
+        index_files = self.index(self.normalize_filenames(file))
 
         return self._source(
             (self.source_func(idx_filename.to_str(), **kwargs) for idx_filename in index_files),
