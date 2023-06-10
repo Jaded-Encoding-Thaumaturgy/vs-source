@@ -136,7 +136,7 @@ def source(
                 props |= dict(dgi_fieldop=1, _FieldBased=0)
 
             clip = indexer.source_func(filepath, **indexer_kwargs)
-        except RuntimeError:
+        except (RuntimeError, AttributeError):
             indexers = list[type[Indexer]]([LSMAS, D2VWitch, DGIndex])
 
             try:
