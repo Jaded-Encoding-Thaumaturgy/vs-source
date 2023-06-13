@@ -69,7 +69,7 @@ class source_func(Protocol):
         ...
 
 
-_source_func: source_func = ...
+_source_func: source_func = ...  # type: ignore
 
 
 @copy_signature(_source_func)
@@ -121,6 +121,25 @@ def source(
         clip = IMWRI.source_func(str(filepath), **kwargs)
     else:
         try:
+            try:
+                from pymediainfo import MediaInfo  # type: ignore
+            except ImportError:
+                ...
+            else:
+                trackmeta = MediaInfo.parse(filepath, parse_speed=0.25).video_tracks[0].to_data()
+                video_format = trackmeta.get("format")
+
+                if video_format is not None:
+                    video_fmt = str(video_format).strip().lower()
+
+                    if video_fmt == 'ffv1':
+                        raise RuntimeError
+
+                    bitdepth = trackmeta.get('bit_depth')
+
+                    if bitdepth is not None and video_fmt == 'avc' and int(bitdepth) > 8:
+                        raise RuntimeError
+
             indexer = DGIndexNV()
 
             if filepath.suffix != ".dgi":
