@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 from abc import ABC, abstractmethod
 from hashlib import md5
+from os import name as os_name
 from typing import Any, Callable, ClassVar, Iterable, Literal, Protocol, Sequence
 
 from vstools import (
@@ -147,7 +148,7 @@ class ExternalIndexer(Indexer):
 
     def _get_bin_path(self) -> SPath:
         if not (bin_path := shutil.which(str(self.bin_path))):
-            raise FileNotFoundError(f'Indexer: `{self.bin_path}` was not found!')
+            raise FileNotFoundError(f'Indexer: `{self.bin_path}` was not found{" in PATH" if os_name == "nt" else ""}!')
         return SPath(bin_path)
 
     def _run_index(self, files: list[SPath], output: SPath, cmd_args: Sequence[str]) -> None:
