@@ -5,7 +5,7 @@ from typing import Any, Literal, Protocol, Sequence, overload
 
 from vstools import (
     ChromaLocationT, ColorRangeT, CustomRuntimeError, FieldBasedT, FileType, FileTypeMismatchError, IndexingType,
-    MatrixT, PrimariesT, SPathLike, TransferT, check_perms, copy_signature, initialize_clip, match_clip, vs
+    MatrixT, PrimariesT, SPathLike, TransferT, check_perms, copy_signature, initialize_clip, match_clip, to_arr, vs
 )
 
 from .indexers import IMWRI, LSMAS, BestSource, D2VWitch, DGIndex, DGIndexNV, Indexer
@@ -115,30 +115,38 @@ def source(
 
     props = dict[str, Any]()
 
+    to_skip = to_arr(kwargs.get('_to_skip', []))
+
     if file.ext is IndexingType.LWI:
-        clip = LSMAS.source_func(str(filepath), **kwargs)
+        clip = LSMAS.source_func(filepath, **kwargs)
     elif file.file_type is FileType.IMAGE:
-        clip = IMWRI.source_func(str(filepath), **kwargs)
+        clip = IMWRI.source_func(filepath, **kwargs)
     else:
         try:
+            if DGIndexNV in to_skip:
+                raise RuntimeError
+
             try:
                 from pymediainfo import MediaInfo  # type: ignore
             except ImportError:
                 ...
             else:
-                trackmeta = MediaInfo.parse(filepath, parse_speed=0.25).video_tracks[0].to_data()
-                video_format = trackmeta.get("format")
+                tracks = MediaInfo.parse(filepath, parse_speed=0.25).video_tracks
+                if tracks:
+                    trackmeta = tracks[0].to_data()
 
-                if video_format is not None:
-                    video_fmt = str(video_format).strip().lower()
+                    video_format = trackmeta.get("format")
 
-                    if video_fmt == 'ffv1':
-                        raise RuntimeError
+                    if video_format is not None:
+                        video_fmt = str(video_format).strip().lower()
 
-                    bitdepth = trackmeta.get('bit_depth')
+                        if video_fmt == 'ffv1':
+                            raise RuntimeError
 
-                    if bitdepth is not None and video_fmt == 'avc' and int(bitdepth) > 8:
-                        raise RuntimeError
+                        bitdepth = trackmeta.get('bit_depth')
+
+                        if bitdepth is not None and video_fmt == 'avc' and int(bitdepth) > 8:
+                            raise RuntimeError
 
             indexer = DGIndexNV()
 
@@ -171,11 +179,19 @@ def source(
                 indexers.insert(0, BestSource)
 
             for indexerr in indexers:
+                if indexerr in to_skip:
+                    continue
+
                 try:
                     clip = indexerr.source(filepath)
                     break
-                except Exception:
-                    ...
+                except Exception as e:
+                    if 'bgr0 is not supported' in str(e):
+                        try:
+                            clip = indexerr.source(filepath, format='rgb24')
+                            break
+                        except Exception:
+                            ...
 
     if clip is None:
         raise CustomRuntimeError(f'None of the indexers you have installed work on this file! "{filepath}"')
