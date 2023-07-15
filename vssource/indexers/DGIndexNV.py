@@ -97,7 +97,11 @@ class DGIndexNV(ExternalIndexer):
             elif key == 'DEPTH':
                 header.depth = int(values[0])
             elif key == 'ASPECT':
-                header.aspect = Fraction(*list(map(int, values)))
+                try:
+                    header.aspect = Fraction(*list(map(int, values)))
+                except ZeroDivisionError:
+                    header.aspect = Fraction(1, 1)
+                    print(ResourceWarning('Encountered video with 0/0 aspect ratio!'))
             elif key == 'COLORIMETRY':
                 header.colorimetry = tuple(map(int, values))
             elif key == 'PKTSIZ':
