@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import NamedTuple, Union
+from typing import NamedTuple, Union, List
 
 from vstools import SPath
 
@@ -10,12 +10,6 @@ from vstools import SPath
 class _SetItemMeta:
     def __setitem__(self, key: str, value: float | int) -> None:
         return self.__setattr__(key, value)
-
-
-class IFOFileInfo(NamedTuple):
-    chapters: list[list[int]]
-    fps: Fraction
-    is_multiple_IFOs: bool
 
 
 class IndexFileVideo(NamedTuple):
@@ -64,6 +58,7 @@ class D2VIndexFrameData(IndexFileFrameData):
     info: str
     skip: int
     position: int
+    frameflags: List[int]
 
 
 @dataclass

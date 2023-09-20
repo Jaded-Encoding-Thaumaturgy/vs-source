@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-import tempfile
 from fractions import Fraction
 from functools import lru_cache
 
@@ -16,8 +15,6 @@ __all__ = [
 
 
 class D2VWitch(ExternalIndexer):
-    frame_lengths_key = "FilesFrameLengths"
-
     _bin_path = 'd2vwitch'
     _ext = 'd2v'
     _source_func = core.lazy.d2v.Source
@@ -50,48 +47,6 @@ class D2VWitch(ExternalIndexer):
 
         with open(index_path, 'w') as file:
             file.write('\n'.join(lines))
-
-    def write_idx_file_videoslength(self, index_path: SPath) -> list[int]:
-        with open(index_path, 'r') as f:
-            file_content = f.read()
-
-        lines = file_content.split('\n')
-
-        prev_lines, lines = lines[:2], lines[2:]
-
-        if "DGIndex" not in prev_lines[0]:
-            self.file_corrupted(index_path)
-
-        vid_lines, lines = self._split_lines(lines)
-        prev_lines += vid_lines + ['']
-
-        vids_frame_lenghts = []
-
-        for path in map(SPath, vid_lines):
-            temp_idx_files = self.index([path], True, False, tempfile.gettempdir())[0].to_str()
-
-            if path.to_str().lower().endswith('_0.vob'):
-                with open(temp_idx_files, 'r') as f:
-                    idx_file_content = f.read()
-
-                if len(idx_file_content.splitlines()) < 20:
-                    vids_frame_lenghts += [1]
-                    continue
-
-            vid_file = self.source_func(temp_idx_files)
-
-            vids_frame_lenghts += [vid_file.num_frames]
-
-        raw_header, lines = self._split_lines(lines)
-
-        raw_header = [line for line in raw_header if self.frame_lengths_key not in line]
-
-        raw_header += [f"{self.frame_lengths_key}={','.join(map(str, vids_frame_lenghts))}", '']
-
-        with open(index_path, 'w') as file:
-            file.write('\n'.join(prev_lines + raw_header + lines))
-
-        return vids_frame_lenghts
 
     @lru_cache
     def get_info(self, index_path: SPath, file_idx: int = -1) -> D2VIndexFileInfo:
@@ -142,11 +97,6 @@ class D2VWitch(ExternalIndexer):
                     header.frame_rate = Fraction(matches.group(1))
             elif key == 'LOCATION':
                 header.location = list(map(int, values))
-            elif key == self.frame_lengths_key.upper():
-                video_frame_lenghts = list(map(int, values))
-
-        if len(video_frame_lenghts) != len(vid_lines):
-            video_frame_lenghts = self.write_idx_file_videoslength(index_path)
 
         videos = [
             IndexFileVideo(path, path.stat().st_size, vidlen)
@@ -173,6 +123,20 @@ class D2VWitch(ExternalIndexer):
                     int(line[1]), 'I', int(line[5]),
                     int(line[6]), bin(int(line[0], 16))[2:].zfill(8),
                     int(line[4]), int(line[3])
+                ))
+        elif file_idx == -1:
+            for rawline in lines:
+                if len(rawline) == 0:
+                    break
+
+                line = rawline.split(" ")
+
+                frame_data.append(D2VIndexFrameData(
+                    int(line[1]), 'I', int(line[5]),
+                    int(line[6]), bin(int(line[0], 16))[2:].zfill(8),
+                    int(line[4]), int(line[3]),
+
+                    list(int(a, 16) for a in line[7:])
                 ))
 
         return D2VIndexFileInfo(index_path, file_idx, videos, header, frame_data)
