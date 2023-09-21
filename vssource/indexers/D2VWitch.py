@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from fractions import Fraction
-from functools import lru_cache
+from functools import lru_cache, partial
 
 from vstools import SPath, core
 
@@ -96,7 +96,7 @@ class D2VWitch(ExternalIndexer):
                 if matches := re.search(r".*\((\d+\/\d+)", values[0]):
                     header.frame_rate = Fraction(matches.group(1))
             elif key == 'LOCATION':
-                header.location = list(map(int, values))
+                header.location = list(map(partial(int, base=16), values))
 
         videos = [
             IndexFileVideo(path, path.stat().st_size, vidlen)

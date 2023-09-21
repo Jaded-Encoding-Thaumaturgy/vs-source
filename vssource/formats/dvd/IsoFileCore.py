@@ -1,6 +1,6 @@
 from __future__ import annotations
 from dataclasses import dataclass
-
+import os
 import datetime
 from abc import abstractmethod
 from fractions import Fraction
@@ -8,10 +8,13 @@ from typing import List, Sequence, Tuple
 
 from vstools import CustomValueError, SPath, vs
 
-from ...indexers import D2VWitch, ExternalIndexer
+from ...indexers import D2VWitch, DGIndex, ExternalIndexer
 import json
 from functools import partial
 
+
+from .parsedvd.ifo import IFO0, IFOX
+import jsondiff
 
 # d2vwitch needs this patch applied
 # https://gist.github.com/jsaowji/ead18b4f1b90381d558eddaf0336164b
@@ -39,6 +42,22 @@ def absolute_time_from_timecode(timecodes):
             absolutetime += [absolutetime[i - 1] + float(a)]
     return absolutetime
 
+# TODO: from pydvdsrc
+def _get_sectors_from_vobids(target_vts: dict, vobidcellids_to_take: List[Tuple[int, int]]):
+    sectors = []
+    for a in vobidcellids_to_take:
+        for srange in _get_sectorranges_for_vobcellpair(target_vts, a):
+            sectors += list(range(srange[0], srange[1] + 1))
+    return sectors
+
+# TODO: from pydvdsrc
+def _get_sectorranges_for_vobcellpair(current_vts: dict, pair_id: Tuple[int, int]):
+    ranges = []
+    for e in current_vts["vts_c_adt"]:
+        if e["cell_id"] == pair_id[1] and e["vob_id"] == pair_id[0]:
+            ranges += [(e["start_sector"], e["last_sector"])]
+    return ranges
+
 
 @dataclass
 class Title:
@@ -49,20 +68,6 @@ class Title:
     _vobidcellids_to_take: List[Tuple[int, int]]
     _absolute_time: List[float]
     _audios: List[str]
-
-    # # starting 0
-    # # end inclusive
-    # #  0 0 -> chapter 0
-    # def cut_fz(self, f: int, t: int) -> vs.VideoNode:
-    #     if f < 0 or f >= len(self.chapters):
-    #         raise CustomValueError('invalid from', self.__class__)
-    #     if t < -1 or t >= len(self.chapters):
-    #         raise CustomValueError('invalid to', self.__class__)
-    #     f = self.chapters[f]
-    #     t = self.chapters[t]
-    #     return self.node[f:t + 1]
-    # def cut_f1(self, f: int, t: int) -> vs.VideoNode:
-    #     return self.cut_fz([f - 1, t - 1])
 
     def __repr__(self) -> str:
         chapters = self.chapters + [len(self.node) - 1]
@@ -85,7 +90,7 @@ class Title:
         asd = self._audios[i]
 
         target_vts = self._core.json["ifos"][self._vts]
-        sectors = self._core._sectors_from_vobids(target_vts, self._vobidcellids_to_take)
+        sectors = _get_sectors_from_vobids(target_vts, self._vobidcellids_to_take)
 
         if asd.startswith("ac3"):
             return vs.core.dvdsrc.FullAC3(self._core.iso_path, self._vts, 1, sectors, i)
@@ -98,7 +103,7 @@ class Title:
         wrt = open(a, "wb")
 
         target_vts = self._core.json["ifos"][self._vts]
-        sectors = self._core._sectors_from_vobids(target_vts, self._vobidcellids_to_take)
+        sectors = _get_sectors_from_vobids(target_vts, self._vobidcellids_to_take)
 
         nd = vs.core.dvdsrc.RawAc3(self._core.iso_path, self._vts, 1, sectors, i)
         for f in nd.frames():
@@ -113,15 +118,60 @@ class IsoFileCore:
     _subfolder = "VIDEO_TS"
 
     def __init__(
-        self, path: SPath | str
+        self, path: SPath | str,
+        use_dvdsrc = True,
+        indexer: ExternalIndexer | type[ExternalIndexer] = None,
     ):
-        indexer = D2VWitch
+        '''
+        Only external indexer supported D2VWitch and DGIndex
+
+        indexer only uesd if use_dvdsrc == False
+        '''
+        if indexer is None:
+            indexer = DGIndex() if os.name == "nt" else D2VWitch()
         force_root: bool = False
 
+        self._mount_path: SPath | None = None
+        self._vob_files: list[SPath] | None = None
+        self._ifo_files: list[SPath] | None = None
+
+
+
+        self.has_dvdsrc = hasattr(vs.core,"dvdsrc")
+        
+        if not self.has_dvdsrc and use_dvdsrc:
+            use_dvdsrc = False
+            print("Requested dvdsrc but not installed")
+
+        self.use_dvdsrc = use_dvdsrc
         self.iso_path = SPath(path).absolute()
 
-        self.json = json.loads(vs.core.dvdsrc.Json(self.iso_path))
-        json.dump(self.json, open("/tmp/asd.json", "wt"))
+        if self.use_dvdsrc:
+            self.json = json.loads(vs.core.dvdsrc.Json(self.iso_path))
+        else:
+            self.json = { "ifos": []}
+            for i,a in enumerate(self.ifo_files):
+                if i == 0:
+                    self.json["ifos"] += [ IFO0(a).crnt ]
+                else:
+                    self.json["ifos"] += [ IFOX(a).crnt ]
+            if not self.has_dvdsrc:
+                print("Does not have dvdsrc cant double check json with libdvdread")
+            else:
+                dvdsrc_json = json.loads(vs.core.dvdsrc.Json(self.iso_path))
+                del dvdsrc_json["dvdpath"]
+                del dvdsrc_json["current_vts"]
+                
+                del dvdsrc_json["current_domain"]
+                if json.dumps(dvdsrc_json,sort_keys=True) != json.dumps(self.json,sort_keys=True):
+                    print("libdvdread json does not match our json")
+                    #dff = jsondiff.diff(dvdsrc_json, self.json)
+                    #print(dff)
+
+                
+
+        
+        #json.dump(self.json, open("/tmp/asd.json", "wt"))
 
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
             raise CustomValueError('"path" needs to point to a .ISO or a dir root of DVD', self.__class__)
@@ -129,14 +179,9 @@ class IsoFileCore:
         self.indexer = indexer if isinstance(indexer, ExternalIndexer) else indexer()
         self.force_root = force_root
 
-        # Here so it resets between reloads in vspreview
-        self._mount_path: SPath | None = None
-        self._vob_files: list[SPath] | None = None
         self.title_count = len(self.json["ifos"][0]["tt_srpt"])
 
-        self.use_dvdsrc = True
-
-        self.output_folder = "/tmp"
+        self.output_folder = "/tmp" if os.name != "nt" else "C:/tmp" 
 
     def get_title(
         self,
@@ -217,10 +262,11 @@ class IsoFileCore:
 
         assert len(is_chapter) == len(vobidcellids_to_take)
 
-        import pydvdsrc
 
         if self.use_dvdsrc:
-            sectors = self._sectors_from_vobids(target_vts, vobidcellids_to_take)
+            import pydvdsrc
+
+            sectors = _get_sectors_from_vobids(target_vts, vobidcellids_to_take)
             rawnode = vs.core.dvdsrc.FullM2V(self.iso_path, vts=title_set_nr, domain=1, sectors=sectors)
             exa = pydvdsrc.DVDSRCM2vInfoExtracter(rawnode)
             rff = exa.rff
@@ -232,6 +278,8 @@ class IsoFileCore:
                 rnode = rawnode
                 vobids = exa.vobid
         else:
+            import pydvdsrc
+
             vob_input_files = self._get_title_vob_files_for_vts(title_set_nr)
             dvddd = self._d2v_vobid_frameset(title_set_nr)
 
@@ -375,21 +423,6 @@ class IsoFileCore:
 
         return Title(rnode, output_chapters, self, title_set_nr, vobidcellids_to_take, absolutetime, audios)
 
-    def _sectors_from_vobids(self, target_vts: dict, vobidcellids_to_take: List[Tuple[int, int]]):
-        sectors = []
-        for a in vobidcellids_to_take:
-            for srange in self._get_sectorranges_for_vobcellpair(target_vts, a):
-                sectors += list(range(srange[0], srange[1] + 1))
-        return sectors
-
-    # TODO: from pydvdsrc
-    def _get_sectorranges_for_vobcellpair(self, current_vts: dict, pair_id: Tuple[int, int]):
-        ranges = []
-        for e in current_vts["vts_c_adt"]:
-            if e["cell_id"] == pair_id[1] and e["vob_id"] == pair_id[0]:
-                ranges += [(e["start_sector"], e["last_sector"])]
-        return ranges
-
     def _d2v_collect_all_frameflags(self, title_set_nr: int) -> Sequence[int]:
         files = self._get_title_vob_files_for_vts(title_set_nr)
         index_file = self.indexer.index(files, output_folder=self.output_folder)[0]
@@ -470,6 +503,22 @@ class IsoFileCore:
         self._vob_files = vob_files
 
         return self._vob_files
+    
+    @property
+    def ifo_files(self) -> list[SPath]:
+        if self._ifo_files is not None:
+            return self._ifo_files
+
+        ifo_files = [
+            f for f in sorted(self.mount_path.glob('*.[iI][fF][oO]'))
+        ]
+
+        if not len(ifo_files):
+            raise FileNotFoundError('IsoFile: No IFOs found!')
+
+        self._ifo_files = ifo_files
+
+        return self._ifo_files
 
     @abstractmethod
     def _get_mounted_disc(self) -> SPath | None:

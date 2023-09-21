@@ -1,6 +1,6 @@
 {
   "python.formatting.autopep8Args": ["--max-line-length=120", "--experimental", "--aggressive", "--indent-size=4"],
-  "python.linting.flake8Enabled": true,
+  "python.linting.flake8Enabled": false,
   "python.linting.flake8Args": ["--max-line-length=120", "--ignore=None"],
   "python.linting.mypyEnabled": true,
   "python.linting.pydocstyleArgs": ["--ignore=None"],
