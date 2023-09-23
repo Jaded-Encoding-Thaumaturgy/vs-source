@@ -6,7 +6,7 @@ from pprint import pformat
 from struct import unpack
 from typing import Any, List
 
-from vstools import CustomIntEnum, SPath, SPathLike
+from vstools import SPath, SPathLike
 
 import os
 
@@ -52,16 +52,14 @@ class SectorReadHelper(ABC):
     def _unpack_byte(self, n: int | List[int]) -> tuple[Any, ...]:
         stra = ">"
 
-
         if isinstance(n, int):
-            nn = n
-            stra += {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}.get(n, 'B')
-        else:
-            nn = 0
-            for a in n:
-                nn += a
-                stra += {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}.get(a, 'B')
-        #print(stra,nn)
-        buf = self.ifo.read(nn)
-        assert len(buf) == nn
+            n = [n]
+        bytecnt = 0
+        for a in n:
+            bytecnt += a
+            stra += {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}.get(a, 'B')
+
+        buf = self.ifo.read(bytecnt)
+
+        assert len(buf) == bytecnt
         return unpack(stra, buf)
