@@ -20,6 +20,8 @@ The splits should behave just like mkvmerge chapter splits (split before the cha
 
 So if you want the (first chapter, all other chapters after) [2].
 
+Output chapters always start at beginning (0) and end at last frame.
+
 Hitting I in mpv is helpful for determining chapter splits
 ```bash
 mpv --dvd-device=<iso> dvd://<title>
@@ -28,6 +30,8 @@ mpv --dvd-device=<iso> dvd://<title>
 # sometimes it is useful to to scale the osc down
 # --script-opts=osc-scalewindowed=0.4,osc-scalefullscreen=0.4
 ```
+
+Also helpful [mpv-dvd-browser](https://github.com/CogentRedTester/mpv-dvd-browser)
 
 It has not been tested throughly in production yet, so api, functionality, features and output is subject to change.
 
@@ -63,6 +67,8 @@ iso = IsoFile(".\SOME_DVD_FOLDER", True)
 print(iso)
 
 title1 = iso.get_title(1)
+
+# prints audio and chapter information
 print(title1)
 
 title1.video().set_output(0)
@@ -70,40 +76,59 @@ title1.audio(0).set_output(1)
 
 title1.dump_ac3("full_title.ac3", 0)
 
-t1 = iso.get_title(1, [7, 13])
+t1 = title1
+# -1 is replace with end i.e 15
+ep1,ep2,ep3 = t1.split([6,11])
+ep1,ep2,ep3 = t1.split_ranges([(1,5),(6,10),(11,15)])
+ep1         = t1.split_range(1, 5)
+ep2         = t1.split_range(6, 10)
+ep3         = t1.split_range(11, -1)
 
-# these do the same thing
-set_output(list(t1.split_video()) + list(t1.split_audio(0)))
-t1.preview_output_split(0)
+# preview your splits
+t1.preview(t1.split([6,11]))
 
-ep1,ep2,information = t1.split_video()
-ep1a,ep2a,informationa = t1.split_audio(0)
-a,b,c = t1.split_ac3(0)
-#a,b,c[0] contain path to ac3 file
-#a,b,c[1] contains in seconds of how much samples are there too much at the start
+ep1 = t1.split_range(1,5,audio=0)
+print(ep1.chapters[:-1])
+set_output([
+    ep1.video,
+    ep1.audio,
+])
+
+a = ep1.split_ac3(0)
+#a[0] contain path to ac3 file
+#a[1] contains in seconds of how much samples are there too much at the start
 ```
 
 ## Advanced Usage
 ```py
+
 # Remove junk from the end 
-t1 = iso.get_title(1,[7, 12])
+t1 = iso.get_title(1)
 t1.chapters[-1] -= 609
-ep1,ep2,ep3 = t1.split_video()
+t1.preview(t1.split([7,12]))
 
 
 #title 2 through 5 containe episodes
 #remove "junk" from beginning
-#you can quickly check 
+#you can quickly check with preview
 for a in range(2,6):
-    t = iso.get_title(a,splits=[])
+    t = iso.get_title(a)
     t.chapters[0] += 180
-    t.preview_output_split()
+    t.preview(t.split([]))
 
-# multi angle + rff mode
+# multi angle + multi audio + rff mode
 #japanese
-t4 = iso.get_title(4, [5,10,15], angle_nr=1, rff_mode=2)
-t4.preview_output_split(audio=1)
+a = iso.get_title(4, angle_nr=1, rff_mode=2).split([5,10,15],audio=1)
+
+# ep 1 japanese
+a[0].video.set_output(0)
+a[0].audio.set_output(1)
+
 #italian
-t4 = iso.get_title(4, [5,10,15], angle_nr=2, rff_mode=2)
-t4.preview_output_split(audio=0)
+b = iso.get_title(4, angle_nr=2, rff_mode=2).split([5,10,15],audio=0)
+
+# ep 2 italian
+b[1].video.set_output(0)
+b[1].audio.set_output(1)
+
 ```
