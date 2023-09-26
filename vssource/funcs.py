@@ -5,7 +5,7 @@ from typing import Any, Literal, Protocol, Sequence, overload
 
 from vstools import (
     ChromaLocationT, ColorRangeT, CustomRuntimeError, FieldBasedT, FileType, FileTypeMismatchError, IndexingType,
-    MatrixT, PrimariesT, SPathLike, TransferT, check_perms, copy_signature, initialize_clip, match_clip, to_arr, vs
+    MatrixT, PrimariesT, SPath, SPathLike, TransferT, check_perms, copy_signature, initialize_clip, match_clip, to_arr, vs
 )
 
 from .indexers import IMWRI, LSMAS, BestSource, D2VWitch, DGIndex, DGIndexNV, Indexer
@@ -127,7 +127,7 @@ def source(
                 raise RuntimeError
 
             try:
-                from pymediainfo import MediaInfo  # type: ignore
+                from pymediainfo import MediaInfo
             except ImportError:
                 ...
             else:
@@ -148,12 +148,12 @@ def source(
                         if bitdepth is not None and video_fmt == 'avc' and int(bitdepth) > 8:
                             raise RuntimeError
 
-            indexer = DGIndexNV()
+            indexer, filepath_dgi = DGIndexNV(), SPath(filepath)
 
-            if filepath.suffix != ".dgi":
-                filepath = next(iter(indexer.index([filepath], False, False)))
+            if filepath_dgi.suffix != ".dgi":
+                filepath_dgi = next(iter(indexer.index([filepath_dgi], False, False)))
 
-            idx_info = indexer.get_info(filepath, 0).footer
+            idx_info = indexer.get_info(filepath_dgi, 0).footer
 
             props |= dict(dgi_fieldop=0, dgi_order=idx_info.order, dgi_film=idx_info.film)
 
@@ -162,7 +162,7 @@ def source(
                 indexer_kwargs |= dict(fieldop=1)
                 props |= dict(dgi_fieldop=1, _FieldBased=0)
 
-            clip = indexer.source_func(filepath, **indexer_kwargs)
+            clip = indexer.source_func(filepath_dgi, **indexer_kwargs)
         except (RuntimeError, AttributeError, FileNotFoundError):
             indexers = list[type[Indexer]]([LSMAS, D2VWitch, DGIndex])
 
