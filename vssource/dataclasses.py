@@ -55,7 +55,7 @@ class D2VIndexHeader(_SetItemMeta):
 
 @dataclass
 class D2VIndexFrameData(IndexFileFrameData):
-    info: str
+    info: int
     skip: int
     position: int
     frameflags: List[int]

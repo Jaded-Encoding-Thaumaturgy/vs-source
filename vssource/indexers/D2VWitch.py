@@ -133,7 +133,7 @@ class D2VWitch(ExternalIndexer):
 
                 frame_data.append(D2VIndexFrameData(
                     int(line[1]), 'I', int(line[5]),
-                    int(line[6]), bin(int(line[0], 16))[2:].zfill(8),
+                    int(line[6]), int(line[0], 16),
                     int(line[4]), int(line[3]),
 
                     list(int(a, 16) for a in line[7:])

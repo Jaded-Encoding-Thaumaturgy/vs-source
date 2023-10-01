@@ -10,11 +10,18 @@ Required plugins:
 - or
 - d2vsource and (dgindex or ([patched](https://gist.github.com/jsaowji/ead18b4f1b90381d558eddaf0336164b) d2vwitch))
 
+dgindex is recommended over d2vwitch because d2vwitch has problems.
+
+dgindex can be used under linux with wine and requires binfmt and dgindex in path
+chmod +x DGIndex.exe
+sudo ln -s $(pwd)/DGIndex.exe /usr/bin/dgindex
+
+
 Optional dependecies:
 - The Chapters can be automatically be checked against libdvdnav using [dvdsrc_dvdnav_title_ptt_test](https://gist.github.com/jsaowji/2bbf9c776a3226d1272e93bb245f7538)
 - The determined dvdstrucut can automatically be double checked agaist libdvdread with dvdsrc
 
-Getting a vs.AudioNode  **require** [dvdsrc](https://github.com/jsaowji/dvdsrc/)
+Getting a vs.AudioNode  **requires** [dvdsrc](https://github.com/jsaowji/dvdsrc/)
 
 The splits should behave just like mkvmerge chapter splits (split before the chapter, first chapter is 1)
 
@@ -34,6 +41,8 @@ mpv --dvd-device=<iso> dvd://<title>
 Also helpful [mpv-dvd-browser](https://github.com/CogentRedTester/mpv-dvd-browser)
 
 It has not been tested throughly in production yet, so api, functionality, features and output is subject to change.
+
+Audio support is still flaky, one known problem is if a complete title does not contain any seamless cut, which is mostly not the case on main feature.
 
 <br><br>
 ## How to install

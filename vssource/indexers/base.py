@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 import tempfile
+import os
 from abc import ABC, abstractmethod
 from hashlib import md5
 from os import name as os_name
@@ -245,8 +246,10 @@ class ExternalIndexer(Indexer):
         return outputs
 
     def get_video_idx_path(self, folder: SPath, file_hash: str, video_name: SPathLike) -> SPath:
+        current_indxer = os.path.basename(self._bin_path)
+
         vid_name = SPath(video_name).stem
-        filename = '_'.join([file_hash, vid_name])
+        filename = '_'.join([file_hash, vid_name, current_indxer])
         return self.get_idx_file_path(folder / self.index_folder_name / filename)
 
     @inject_self
