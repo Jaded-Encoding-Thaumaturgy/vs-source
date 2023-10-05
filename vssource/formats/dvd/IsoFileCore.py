@@ -28,15 +28,6 @@ __all__ = [
 # d2vwitch needs this patch applied
 # https://gist.github.com/jsaowji/ead18b4f1b90381d558eddaf0336164b
 
-def assert_dvdsrc():
-    if not hasattr(vs.core, "dvdsrc"):
-        raise CustomValueError('For dvdsrc only features dvdsrc plugin needs to be installed', __file__)
-    try:
-        import pydvdsrc
-    except ImportError:
-        raise CustomValueError('For dvdsrc only features pydvdsrc python file needs to be installed', __file__)
-
-
 # https://gist.github.com/jsaowji/2bbf9c776a3226d1272e93bb245f7538
 def double_check_dvdnav(iso: str, title: int):
     try:
@@ -58,6 +49,14 @@ def absolute_time_from_timecode(timecodes):
         else:
             absolutetime += [absolutetime[i - 1] + float(a)]
     return absolutetime
+
+@dataclass
+class AllNeddedDvdFrameData:
+    vobids: List[int]
+    tff: List[int]
+    rff: List[int]
+    prog: List[int]
+    progseq: List[int]
 
 @dataclass
 class SplitTitle:
@@ -108,6 +107,7 @@ class Title:
     _title: int
     _vts: int
     _vobidcellids_to_take: List[Tuple[int, int]]
+    _dvdsrc_ranges: List[int]
     _absolute_time: List[float]
     _audios: List[str]
     _patched_end_chapter: int | None
@@ -144,7 +144,6 @@ class Title:
                     a = a[0]
             
             reta += [SplitTitle(video[i], a, chapters[i], self, splits, i)]
-            #reta += [SplitTitle(video[i], chapters[i], self, splits, i)]
 
         if len(reta) == 1:
             return reta[0]
@@ -185,197 +184,22 @@ class Title:
                 splt = [splt]
             for i,a in enumerate(list(splt)):
                 set_output(a.video, f"split {i}")
+            for i,a in enumerate(list(splt)):
+                if isinstance(a.audio, vs.AudioNode):
+                    set_output(a.audio, f"split {i}")
+                    
 
     def video(self) -> vs.VideoNode:
         return self.node
 
-    def neo_dump_ac3(self, afilepath: str, audio_i: int = 0, only_calc_delay: bool = False) -> float:
-        assert_dvdsrc()
-        import pydvdsrc
-        target_vts = self._core.json["ifos"][self._vts]
-        sectors = pydvdsrc.get_sectors_from_vobids(target_vts, self._vobidcellids_to_take)
-        last_sector = sectors[-1]
-        vts_last_sector = 0
-
-        vts_vobu_admap = target_vts["vts_vobu_admap"]
-
-        for a in target_vts["vts_c_adt"]:
-            vts_last_sector = max(vts_last_sector, a["last_sector"])
-        
-        first_vobu_behind = None
-        for i, a in enumerate(vts_vobu_admap):
-            if a > last_sector:
-                if first_vobu_behind is None:
-                    first_vobu_behind = i
-                    break
-        
-        something_behind_still = first_vobu_behind is not None
-        if something_behind_still and (not only_calc_delay):
-            first_vobu_sector_behind = vts_vobu_admap[first_vobu_behind]
-            if first_vobu_behind + 1 != len(vts_vobu_admap):
-                second_vobu_sector_behind = vts_vobu_admap[first_vobu_behind+1]
-            else:
-                second_vobu_sector_behind = vts_last_sector
-            
-            vobu_sectors = list(range(first_vobu_sector_behind, second_vobu_sector_behind+1))
-            vob = vs.core.dvdsrc.VobGet(self._core.iso_path, self._vts, 1, vobu_sectors)
-            b = io.BytesIO(bytes([0x11] * 2048))
-            ii = 0
-
-            first_audio = True
-            while True:
-                if b.tell() % 2048 == 0:
-                    if ii == len(vobu_sectors):
-                        break
-                    b.seek(0)
-                    b.write(bytes(vob.get_frame(ii)[0]))
-                    b.seek(0)
-                    ii += 1
-
-                id = get_start(b)
-                if id == 0xBA:
-                    b.read(10)
-                elif id in [0xBB, 0xBE, 0xE0]:
-                    _ = get_pes(b)
-                elif id == 0xBF:
-                    inner = get_pes(b)
-
-                    inner_id = inner[0]
-                    inner = inner[1:]
-                    if inner_id  == 0:#pci
-                        start_pts = unpack_byte(inner[0xC:0xC+4],4)[0]
-                    elif inner_id == 1:#dsi
-                        pass
-                elif id == 0xBD:
-                    inner = get_pes(b)
-                    pts, dts = get_pts(inner)
-                    inner_data = pes_payload(inner)
-
-                    idd = inner_data[0]
-
-                    if idd >= 0x80 and idd <= 0x87:
-                        adx = idd - 0x80
-                        if adx == audio_i:
-                            if first_audio:
-                                is_seamless = start_pts != pts
-                                first_audio = False
-
-                            if start_pts <= pts:
-                                end_sector = ii
-                                break
-                else:
-                    print(id)
-                    assert False
-            extra_sectors = vobu_sectors[:end_sector] if is_seamless else []
-        else:
-            extra_sectors = []
-        last_real_sector_i = len(sectors)-1
-        sectors += extra_sectors
-        vob = vs.core.dvdsrc.VobGet(self._core.iso_path, self._vts, 1, sectors )
-
-        b = io.BytesIO(bytes([0x11] * 2048))
-
-        start_pts = -1
-        end_pts = -1
-        first_video = True
-        first_audio = True
-        ii = 0
-        #while b.tell() < 2048:
-
-        if only_calc_delay:
-            asd = None
-        else:
-            asd = open(afilepath, "wb")
-
-        audio_offset = 0.0
-
-        while True:
-            if b.tell() % 2048 == 0:
-                if ii == len(sectors):
-                    break
-                b.seek(0)
-                b.write(bytes(vob.get_frame(ii)[0]))
-                b.seek(0)
-                ii += 1
-
-            id = get_start(b)
-            if id == 0xBA:
-                b.read(10)
-            elif id in [0xBB,0xBE]:
-                _ = get_pes(b)
-            elif id == 0xBF:
-                inner = get_pes(b)
-                if ii <= last_real_sector_i:                
-                    inner_id = inner[0]
-                    inner = inner[1:]
-                    if inner_id == 0:#pci
-                        start_pts = unpack_byte(inner[0xC:0xC+4],4)[0]
-                        end_pts = unpack_byte(inner[0x10:0x10+4],4)[0]
-                    elif inner_id == 1:#dsi
-                        pass
-            elif id == 0xBD:
-                inner = get_pes(b)
-                pts, dts = get_pts(inner)
-                inner_data = pes_payload(inner)
-
-                idd = inner_data[0]
-
-                frm_cnt = inner_data[1]
-                first_acc_unit = unpack_byte(inner_data[2:2+2],2)[0]
-
-                if idd >= 0x80 and idd <= 0x87:
-                    adx = idd - 0x80
-                    if adx == 0:
-                        wrt = True
-                        off = 0
-
-                        ac3_packet_length_pts = 2880
-                        packet_end_pts = pts + ac3_packet_length_pts
-
-                        if first_audio:
-                            if  packet_end_pts > start_pts:
-                                audio_offset = (ac3_packet_length_pts - packet_end_pts + start_pts) / 90_000
-                                print("audio offset: {}".format(audio_offset))
-                                off = first_acc_unit - 1
-                                first_audio = False
-                                
-                                if only_calc_delay:
-                                    break
-                            else:
-                                wrt = False
-                        if wrt:
-                            if ii >= last_real_sector_i and pts >= end_pts:
-                                asd.write(inner_data[1 + 3: 1 + 3 + first_acc_unit -1])
-                                
-                                #end for sure
-                                break
-                            else:
-                                asd.write(inner_data[1 + 3 + off:])
-            elif id == 0xE0:
-                inner = get_pes(b)
-                pts, dts = get_pts(inner)
-                if first_video:
-                    assert pts == start_pts
-                    first_video = False
-            else:
-                print(id)
-                assert False
-        
-        return audio_offset
-
     def audio(self, i: int = 0) -> vs.AudioNode:
-        assert_dvdsrc()
-        import pydvdsrc
-
+        self.assert_dvdsrc2()
         asd = self._audios[i]
 
-        target_vts = self._core.json["ifos"][self._vts]
-        sectors = pydvdsrc.get_sectors_from_vobids(target_vts, self._vobidcellids_to_take)
-
         if asd.startswith("ac3"):
-            anode = vs.core.dvdsrc.FullAC3(self._core.iso_path, self._vts, 1, sectors, i)
+            anode = vs.core.dvdsrc2.FullVtsAc3(self._core.iso_path, self._vts, i, self._dvdsrc_ranges)
         elif asd.startswith("lpcm"):
-            anode = vs.core.dvdsrc.FullLPCM(self._core.iso_path, self._vts, 1, sectors, i)
+            anode = vs.core.dvdsrc2.FullVtsLpcm(self._core.iso_path, self._vts, i, self._dvdsrc_ranges)
         else:
             raise CustomValueError('invalid audio at index', self.__class__)
 
@@ -385,95 +209,29 @@ class Title:
 
         return anode
 
-    def dump_ac3(self, a: str, audio_i: int = 0):
+    def assert_dvdsrc2(self):
+        if self._core.use_dvdsrc != 2:
+            raise CustomValueError(f"This feature requires dvdsrc2", __class__)
+
+
+    def dump_ac3(self, a: str, audio_i: int = 0,only_calc_delay: bool = False) -> float:
+        self.assert_dvdsrc2()
         if not self._audios[audio_i].startswith("ac3"):
             raise CustomValueError(f"autio at {audio_i} is not ac3", __class__)
 
-        if self._core.has_dvdsrc:
-            assert_dvdsrc()
-            import pydvdsrc
+        nd = vs.core.dvdsrc2.RawAc3(self._core.iso_path, self._vts, audio_i, self._dvdsrc_ranges)
+        p0 = nd.get_frame(0).props
 
+        print(p0["Stuff_Start_PTS"])
+        print(p0["Stuff_End_PTS"])
+
+        if not only_calc_delay:
             wrt = open(a, "wb")
-
-            target_vts = self._core.json["ifos"][self._vts]
-            sectors = pydvdsrc.get_sectors_from_vobids(target_vts, self._vobidcellids_to_take)
-
-            nd = vs.core.dvdsrc.RawAc3(self._core.iso_path, self._vts, 1, sectors, audio_i)
             for f in nd.frames():
                 wrt.write(bytes(f[0]))
             wrt.close()
-        else:
-            output_file = open(a, "wb")
-            files = self._core._get_title_vob_files_for_vts(self._vts)
-            # sizes = [os.stat(f).st_size for f in files]
 
-            ranges = []
-            for c in self._vobidcellids_to_take:
-                ranges += get_sectorranges_for_vobcellpair(self._core.json["ifos"][self._vts], c)
-
-            files = [open(f, "rb") for f in files]
-            sector = 0
-            file_i = 0
-
-            buffer = bytearray()
-
-            dvd_sector_size = 2048
-
-            while True:
-                if file_i >= len(files):
-                    break
-                result = files[file_i].read(dvd_sector_size)
-
-                if len(result) != dvd_sector_size:
-                    assert len(result) == 0
-                    file_i += 1
-                    continue
-                else:
-                    sectorin = False
-                    for r in ranges:
-                        if sector >= r[0] and sector <= r[1]:
-                            sectorin = True
-                            break
-
-                    if sectorin:
-                        buffer += result
-                    sector += 1
-
-                start_code = 4
-                start_code_plus_len = start_code + 2
-                pack_len = 10
-                while True:
-                    if len(buffer) < start_code:
-                        break
-                    assert buffer[0] == 0
-                    assert buffer[1] == 0
-                    assert buffer[2] == 1
-                    st = buffer[3]
-                    if st == 0xBA:
-                        if len(buffer) < start_code + pack_len:
-                            break
-                        buffer = buffer[start_code + pack_len:]
-                    else:
-                        assert st in [0xBB, 0xBE, 0xE0, 0xBF, 0xBD]
-
-                        if len(buffer) < start_code_plus_len:
-                            break
-
-                        leny = (buffer[4] << 8) + buffer[5]
-
-                        if len(buffer) < start_code_plus_len + leny:
-                            break
-                        if st == 0xBD:
-                            buf = buffer[6:6 + leny]
-                            hdr_data_len = buf[2]
-                            inner_data = buf[3 + hdr_data_len:]
-                            inner_id = inner_data[0]
-                            if inner_id >= 0x80 and inner_id <= 0x87:
-                                idx = inner_id - 0x80
-                                if idx == audio_i:
-                                    output_file.write(inner_data[1 + 3:])
-                        buffer = buffer[start_code_plus_len + leny:]
-
+        return float(p0["Stuff_Start_PTS"]) / 90_000
     def __repr__(self) -> str:
         chapters = self.chapters + [len(self.node) - 1]
         chapter_legnths = [self._absolute_time[chapters[i + 1]] - self._absolute_time[chapters[i]]
@@ -546,12 +304,12 @@ class SplitHelper:
         nn = m.hexdigest()
         nn = os.path.join(title._core.output_folder, f"{nn}.ac3")
         
-        if not os.path.exists(nn):
-            title.dump_ac3(nn, i)
         #if not os.path.exists(nn):
-        #    delay = title.dump_ac3(nn, i)
-        #else:
-        #    delay = title.dump_ac3(nn, i, only_calc_delay=True)
+        #    title.dump_ac3(nn, i)
+        if not os.path.exists(nn):
+            delay = title.dump_ac3(nn, i)
+        else:
+            delay = title.dump_ac3(nn, i, only_calc_delay=True)
 
         bb = open(nn, "rb")
 
@@ -586,8 +344,8 @@ class SplitHelper:
                 if sr0 is None:
                     sr0 = ret.sample_rate
                     split_samples = [a * sr0 for a in split_times]
-                    sample_offsets = [ title._absolute_time[title.chapters[0]] * sr0 ]
-                    #sample_offsets = [ title._absolute_time[title.chapters[0]] * sr0 + int(delay * sr0) ]
+                    #sample_offsets = [ title._absolute_time[title.chapters[0]] * sr0 ]
+                    sample_offsets = [ title._absolute_time[title.chapters[0]] * sr0 + int(delay * sr0) ]
                     #TODO: make it so it cuts off frames at the beginning instead of big delay if start is shifted
                 else:
                     assert ret.sample_rate == sr0
@@ -645,10 +403,10 @@ class SplitHelper:
 
         return tuple(out)
 
-    # starting 0
-    # end inclusive
-    #  0 0 -> chapter 0
     def _cut_fz_v(title: Title, vnode: vs.VideoNode, f: int, t: int) -> vs.VideoNode:
+        # starting 0
+        # end inclusive
+        #  0 0 -> chapter 0
         f = title.chapters[f]
         t = title.chapters[t]
         return vnode[f:t]
@@ -665,19 +423,18 @@ class SplitHelper:
         f,t = ft[0],ft[1]
         return anode[f:t]
 
-
 class IsoFileCore:
     _subfolder = "VIDEO_TS"
 
     def __init__(
         self, path: SPath | str,
-        use_dvdsrc=None,
+        use_dvdsrc: None | int = None,
         indexer: ExternalIndexer | type[ExternalIndexer] = None,
     ):
         '''
         Only external indexer supported D2VWitch and DGIndex
 
-        indexer only used if use_dvdsrc == False
+        indexer only used if use_dvdsrc == 0
 
         '''
         self.force_root = False
@@ -690,31 +447,61 @@ class IsoFileCore:
         self._vob_files: list[SPath] | None = None
         self._ifo_files: list[SPath] | None = None
 
-        self.has_dvdsrc = hasattr(vs.core, "dvdsrc")
-
-        if use_dvdsrc is None:
-            use_dvdsrc = self.has_dvdsrc
-
-        if not self.has_dvdsrc and use_dvdsrc:
-            use_dvdsrc = False
-            print("Requested dvdsrc but not installed")
-
+        self.has_dvdsrc1 = hasattr(vs.core, "dvdsrc")
+        self.has_dvdsrc2 = hasattr(vs.core, "dvdsrc2")
+        self.has_dvdsrc = self.has_dvdsrc1
         self.use_dvdsrc = use_dvdsrc
+
+        if self.use_dvdsrc is None:
+            if self.has_dvdsrc2:
+                self.use_dvdsrc = 2
+            elif self.has_dvdsrc1:
+                self.use_dvdsrc = 1
+            else:
+                self.use_dvdsrc = 0
+        
+        if isinstance(self.use_dvdsrc, bool):
+            self.use_dvdsrc = 2 if self.use_dvdsrc else 0 
+        
+        if use_dvdsrc == 1 and not self.has_dvdsrc1:
+            self.use_dvdsrc = 0
+            print("Requested dvdsrc1 but not installed")
+        if use_dvdsrc == 2 and not self.has_dvdsrc2:
+            self.use_dvdsrc = 0
+            print("Requested dvdsrc2 but not installed")
+
         self.iso_path = SPath(path).absolute()
 
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
             raise CustomValueError('"path" needs to point to a .ISO or a dir root of DVD', path, self.__class__)
 
-        if self.use_dvdsrc:
+        if self.use_dvdsrc == 1:
             self.json = json.loads(vs.core.dvdsrc.Json(self.iso_path))
         else:
+
             self.json = {"ifos": []}
-            for i, a in enumerate(self.ifo_files):
-                if i == 0:
-                    self.json["ifos"] += [IFO0(a).crnt]
+            
+            fallback_ifostuff = False
+
+            if self.has_dvdsrc2:
+                i0bytes = vs.core.dvdsrc2.Ifo(self.iso_path,0)
+                if len(i0bytes) <= 15:
+                    fallback_ifostuff = True
+                    print('newer Vapoursynth is required for dvdsrc2 information gathering without mounting')
                 else:
-                    self.json["ifos"] += [IFOX(a).crnt]
-            if not self.has_dvdsrc:
+                    ifo0 = IFO0(io.BufferedReader(io.BytesIO(i0bytes)))
+                    self.json["ifos"] += [ifo0.crnt]
+                    for i in range(1,ifo0.num_vts+1):
+                        self.json["ifos"] += [IFOX(io.BufferedReader(io.BytesIO(vs.core.dvdsrc2.Ifo(self.iso_path,i)))).crnt]
+            
+            if not self.has_dvdsrc2 or fallback_ifostuff:
+                for i, a in enumerate(self.ifo_files):
+                    if i == 0:
+                        self.json["ifos"] += [IFO0(a).crnt]
+                    else:
+                        self.json["ifos"] += [IFOX(a).crnt]
+
+            if not self.has_dvdsrc1:
                 print("Does not have dvdsrc cant double check json with libdvdread")
             else:
                 dvdsrc_json = json.loads(vs.core.dvdsrc.Json(self.iso_path))
@@ -740,6 +527,34 @@ class IsoFileCore:
             self.indexer = indexer if isinstance(indexer, ExternalIndexer) else indexer()
 
         self.title_count = len(self.json["ifos"][0]["tt_srpt"])
+
+    def get_vts(
+        self,
+        title_set_nr: int = 1,
+        d2v_our_rff: bool = False,
+    ) -> vs.VideoNode:
+        """
+        Gets a full vts.
+        only works with dvdsrc2 and d2vsource usese our rff for dvdsrc and d2source rff for d2vsource
+
+        mainly useful for debugging and checking if our rff algorithm is good
+        
+        """
+        assert self.use_dvdsrc in [0,2]
+        if self.use_dvdsrc == 0:
+            vob_input_files = self._get_title_vob_files_for_vts(title_set_nr)
+            index_file = self.indexer.index(vob_input_files, output_folder=self.output_folder)[0]
+        
+            if d2v_our_rff:
+                rawnode = vs.core.dvdsrc2.FullVts(self.iso_path,vts=title_set_nr)
+                staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
+                return apply_rff_video(self.indexer._source_func(index_file, rff=False), staff.rff, staff.tff, staff.prog, staff.progseq)
+            else:
+                return self.indexer._source_func(index_file, rff=True)
+        else:
+            rawnode = vs.core.dvdsrc2.FullVts(self.iso_path,vts=title_set_nr)
+            staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
+            return apply_rff_video(rawnode, staff.rff, staff.tff, staff.prog, staff.progseq)
 
     def get_title(
         self,
@@ -821,9 +636,16 @@ class IsoFileCore:
 
         assert len(is_chapter) == len(vobidcellids_to_take)
 
-        # should set rnode, vobids and rff
-        if self.use_dvdsrc:
-            assert_dvdsrc()
+        # should set rnode, vobids and rff, dvdsrc_ranges
+        if self.use_dvdsrc == 1:
+            dvdsrc_ranges = []
+            if not hasattr(vs.core, "dvdsrc"):
+                raise CustomValueError('For dvdsrc only features dvdsrc plugin needs to be installed', __file__)
+            try:
+                import pydvdsrc
+            except ImportError:
+                raise CustomValueError('For dvdsrc only features pydvdsrc python file needs to be installed', __file__)
+
             import pydvdsrc
 
             sectors = pydvdsrc.get_sectors_from_vobids(target_vts, vobidcellids_to_take)
@@ -837,7 +659,41 @@ class IsoFileCore:
             else:
                 rnode = rawnode
                 vobids = exa.vobid
+        elif self.use_dvdsrc == 2:
+            admap = target_vts["vts_vobu_admap"]
+            def get_sectorranges_for_vobcellpair(current_vts: dict, pair_id: Tuple[int, int]) -> List[Tuple[int,int]]:
+                ranges = []
+                for e in current_vts["vts_c_adt"]:
+                    if e["cell_id"] == pair_id[1] and e["vob_id"] == pair_id[0]:
+                        ranges += [(e["start_sector"], e["last_sector"])]
+                return ranges
+
+            all_ranges = []
+            
+            for a in vobidcellids_to_take:
+                all_ranges += get_sectorranges_for_vobcellpair(target_vts,a)           
+            idxx = []
+            for a in all_ranges:
+                start_index = admap.index(a[0])
+                try:
+                    end_index = admap.index(a[1]+1)-1
+                except ValueError:
+                    end_index = len(admap)-1
+                idxx += [start_index,end_index]
+            #print(idxx)
+            rawnode = vs.core.dvdsrc2.FullVts(self.iso_path,vts=title_set_nr,ranges=idxx)
+            staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
+
+            if not disable_rff:
+                rnode = apply_rff_video(rawnode, staff.rff, staff.tff, staff.prog, staff.progseq)
+                vobids = apply_rff_array(staff.vobids, staff.rff, staff.tff, staff.prog, staff.progseq)
+            else:
+                rnode = rawnode
+                vobids = staff.vobids
+            dvdsrc_ranges = idxx
+            rff = staff.rff
         else:
+            dvdsrc_ranges = []
             vob_input_files = self._get_title_vob_files_for_vts(title_set_nr)
             dvddd = self._d2v_vobid_frameset(title_set_nr)
 
@@ -914,16 +770,16 @@ class IsoFileCore:
 
                 rnode = vs.core.std.AssumeFPS(rnode, fpsnum=new_fps.numerator, fpsden=new_fps.denominator)
 
-                timecodes = [1.0 / rnode.fps for _ in range(len(rnode))]
+                timecodes = [float(1.0 / rnode.fps) for _ in range(len(rnode))]
                 absolutetime = absolute_time_from_timecode(timecodes)
 
         changes = []
-
         for a in range(1, len(vobids)):
             if vobids[a] != vobids[a - 1]:
                 changes += [a]
 
         changes += [len(rnode) - 1]
+
         assert len(changes) == len(is_chapter)
 
         last_chapter_i = 0
@@ -1004,7 +860,7 @@ class IsoFileCore:
                 audios += ["none"]
 
         return Title(rnode, output_chapters, changes, self, title_nr, title_set_nr,
-                      vobidcellids_to_take, absolutetime, audios, patched_end_chapter)
+                      vobidcellids_to_take, dvdsrc_ranges, absolutetime, audios, patched_end_chapter)
 
     def _d2v_collect_all_frameflags(self, title_set_nr: int) -> Sequence[int]:
         files = self._get_title_vob_files_for_vts(title_set_nr)
@@ -1064,6 +920,25 @@ class IsoFileCore:
             self.iso_path = self.iso_path.parent
 
         return self.iso_path / self._subfolder
+
+    def _dvdsrc2_extract_data(rawnode: vs.VideoNode) -> AllNeddedDvdFrameData:
+        dd = bytes(rawnode.get_frame(0).props["InfoFrame"][0])
+        assert len(dd) == len(rawnode) * 4
+
+        vobids = []
+        tff = []
+        rff = []
+        prog = []
+        progseq = []
+        for i in range(0,len(rawnode)):
+            sb  =dd[i*4+0]
+            tff += [ (sb & (1<<0)) >> 0]
+            rff += [ (sb & (1<<1)) >> 1]
+            prog  += [ (sb & (1<<2)) >> 2]
+            progseq += [ (sb & (1<<3)) >> 3]
+            
+            vobids += [ ((dd[i*4+1] << 8) + dd[i*4+2], dd[i*4+3]) ]
+        return AllNeddedDvdFrameData(vobids,tff,rff,prog,progseq)
 
     @property
     def mount_path(self) -> SPath:

@@ -6,7 +6,7 @@
 A wrapper for DVD file structure and ISO files.
 
 Required plugins:
-- dvdsrc
+- dvdsrc2
 - or
 - d2vsource and (dgindex or ([patched](https://gist.github.com/jsaowji/ead18b4f1b90381d558eddaf0336164b) d2vwitch))
 
@@ -16,12 +16,11 @@ dgindex can be used under linux with wine and requires binfmt and dgindex in pat
 chmod +x DGIndex.exe
 sudo ln -s $(pwd)/DGIndex.exe /usr/bin/dgindex
 
-
 Optional dependecies:
 - The Chapters can be automatically be checked against libdvdnav using [dvdsrc_dvdnav_title_ptt_test](https://gist.github.com/jsaowji/2bbf9c776a3226d1272e93bb245f7538)
-- The determined dvdstrucut can automatically be double checked agaist libdvdread with dvdsrc
+- The determined dvdstrucut can automatically be double checked agaist libdvdread with dvdsrc1
 
-Getting a vs.AudioNode  **requires** [dvdsrc](https://github.com/jsaowji/dvdsrc/)
+Getting a vs.AudioNode and demuxing ac3 **requires** [dvdsrc2](https://github.com/jsaowji/dvdsrc2/)
 
 The splits should behave just like mkvmerge chapter splits (split before the chapter, first chapter is 1)
 
@@ -71,7 +70,7 @@ from vstools import set_output
 # Autodetect what to index with
 iso = IsoFile(".\DVD_VIDEO.ISO")
 
-# Index with dvdsrc
+# Index with dvdsrc2
 iso = IsoFile(".\SOME_DVD_FOLDER", True)
 print(iso)
 

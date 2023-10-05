@@ -7,6 +7,10 @@ class IFO0(SectorReadHelper):
     def _load(self) -> None:
         crnt = dict()
 
+        self.ifo.seek(0x3E, os.SEEK_SET)
+        self.num_vts, = self._unpack_byte(2)
+
+
         # tt_srpt
         self._goto_sector_ptr(0x00C4)
         num, _, end = self._unpack_byte([2, 2, 4])
