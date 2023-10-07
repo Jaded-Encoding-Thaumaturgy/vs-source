@@ -68,8 +68,8 @@ class SplitTitle:
     _splits: List[int]
     _index: int
 
-    def split_ac3(self, i: int = 0) -> Tuple[str, float]:
-        return SplitHelper.split_ac3(self._title, self._splits, i)[self._index]
+#    def split_ac3(self, i: int = 0) -> Tuple[str, float]:
+#        return SplitHelper.split_ac3(self._title, self._splits, i)[self._index]
 
     def __repr__(self) -> str:
         #TODO: use absolutetime from title
@@ -109,6 +109,7 @@ class Title:
     _vobidcellids_to_take: List[Tuple[int, int]]
     _dvdsrc_ranges: List[int]
     _absolute_time: List[float]
+    _duration_times: List[float]
     _audios: List[str]
     _patched_end_chapter: int | None
 
@@ -188,7 +189,6 @@ class Title:
                 if isinstance(a.audio, vs.AudioNode):
                     set_output(a.audio, f"split {i}")
                     
-
     def video(self) -> vs.VideoNode:
         return self.node
 
@@ -202,9 +202,20 @@ class Title:
             anode = vs.core.dvdsrc2.FullVtsLpcm(self._core.iso_path, self._vts, i, self._dvdsrc_ranges)
         else:
             raise CustomValueError('invalid audio at index', self.__class__)
+        anode: vs.AudioNode
 
-        delta = abs(self._absolute_time[-1] - anode.num_samples / anode.sample_rate) 
-        if delta > 0.04:
+        prps = anode.get_frame(0).props
+        strt = (prps["Stuff_Start_PTS"] * anode.sample_rate) / 90_000
+        endd = (prps["Stuff_End_PTS"] * anode.sample_rate) / 90_000
+        print("splice", round((strt / anode.sample_rate) * 1000 * 10) / 10,"ms", round((endd / anode.sample_rate) * 1000 * 10) / 10, "ms")
+        strt = int(strt)
+        endd = int(endd)
+        anode = anode[strt:len(anode)-endd]
+
+        total_dura = (self._absolute_time[-1] + self._duration_times[-1])
+        delta = abs(total_dura - anode.num_samples / anode.sample_rate) * 1000
+        print(f"delta {delta} ms")
+        if delta > 50:
             print(f"WARNING rather big audio/video lenght delta might be indecator that sth is off {delta}")
 
         return anode
@@ -212,7 +223,6 @@ class Title:
     def assert_dvdsrc2(self):
         if self._core.use_dvdsrc != 2:
             raise CustomValueError(f"This feature requires dvdsrc2", __class__)
-
 
     def dump_ac3(self, a: str, audio_i: int = 0,only_calc_delay: bool = False) -> float:
         self.assert_dvdsrc2()
@@ -222,8 +232,8 @@ class Title:
         nd = vs.core.dvdsrc2.RawAc3(self._core.iso_path, self._vts, audio_i, self._dvdsrc_ranges)
         p0 = nd.get_frame(0).props
 
-        print(p0["Stuff_Start_PTS"])
-        print(p0["Stuff_End_PTS"])
+        #print(p0["Stuff_Start_PTS"])
+        #print(p0["Stuff_End_PTS"])
 
         if not only_calc_delay:
             wrt = open(a, "wb")
@@ -232,6 +242,40 @@ class Title:
             wrt.close()
 
         return float(p0["Stuff_Start_PTS"]) / 90_000
+
+    def split_range_ac3(self, f: int, t: int, audio_i: int,outfile: str) -> float:
+        nd = vs.core.dvdsrc2.RawAc3(self._core.iso_path, self._vts, audio_i, self._dvdsrc_ranges)
+        prps = nd.get_frame(0).props
+
+        strt = prps["Stuff_Start_PTS"]
+        #endd = prps["Stuff_End_PTS"]
+
+        raw_start = (self._absolute_time[self.chapters[f-1]] * 90_000)
+        raw_end   = ((self._absolute_time[self.chapters[t-1]] + self._duration_times[self.chapters[t-1]]) * 90_000)
+
+        start_pts = raw_start + strt
+        end_pts = (raw_end - raw_start)
+
+        audio_offset_pts = 0
+
+        outf = open(outfile,"wb")
+
+        i = start_pts / 2880
+        while i < len(nd):
+            pkt_start_pts = i * 2880
+            pkt_end_pts = (i+1) * 2880
+            if pkt_start_pts < strt:
+                audio_offset_pts = strt - pkt_start_pts
+            outf.write(bytes(nd.get_frame(i)[0]))
+            #print("LELELE",pkt_end_pts,end_pts)
+            if pkt_end_pts > end_pts:
+                break
+
+            i += 1
+        
+        print("offset is",(audio_offset_pts) / 90,"ms")
+        return audio_offset_pts / 90_000
+
     def __repr__(self) -> str:
         chapters = self.chapters + [len(self.node) - 1]
         chapter_legnths = [self._absolute_time[chapters[i + 1]] - self._absolute_time[chapters[i]]
@@ -295,21 +339,13 @@ class SplitHelper:
         assert len(reta) == len(splits)+1
         return reta
 
-    def split_ac3(title: Title, splits: List[int], i: int = 0) -> Tuple[Tuple[str, float]]:
-        m = hashlib.sha256()
-        m.update(str(title._core.iso_path).encode("utf-8"))
-        m.update(str(title._vobidcellids_to_take).encode("utf-8"))
-        m.update(str(title._vts).encode("utf-8"))
-        m.update(str(i).encode("utf-8"))
-        nn = m.hexdigest()
-        nn = os.path.join(title._core.output_folder, f"{nn}.ac3")
-        
-        #if not os.path.exists(nn):
-        #    title.dump_ac3(nn, i)
-        if not os.path.exists(nn):
-            delay = title.dump_ac3(nn, i)
-        else:
-            delay = title.dump_ac3(nn, i, only_calc_delay=True)
+    def split_ac3(title: Title, splits: List[int], audio_i: int = 0) -> Tuple[Tuple[str, float]]:
+        title.assert_dvdsrc2()
+        if not title._audios[audio_i].startswith("ac3"):
+            raise CustomValueError(f"autio at {audio_i} is not ac3", __class__)
+
+        nd = vs.core.dvdsrc2.RawAc3(title._core.iso_path, title._vts, audio_i, title._dvdsrc_ranges)
+        p0 = nd.get_frame(0).props
 
         bb = open(nn, "rb")
 
@@ -742,10 +778,12 @@ class IsoFileCore:
 
         if not disable_rff:
             rnode = vs.core.std.AssumeFPS(rnode, fpsnum=fpsnum, fpsden=fpsden)
+            durationcodes = [fpsden/fpsnum for a in range(len(rnode))]
             absolutetime = [a * (fpsden / fpsnum) for a in range(len(rnode))]
         else:
             if rff_mode == 1:
                 timecodes = [Fraction(fpsden * (a + 2), fpsnum * 2) for a in rff]
+                durationcodes = timecodes
                 absolutetime = absolute_time_from_timecode(timecodes)
 
                 def apply_timecode(n, f, timecodes, absolutetime):
@@ -765,13 +803,20 @@ class IsoFileCore:
 
                 asd = (rffcnt * 3 + 2 * (len(rff) - rffcnt)) / len(rff)
 
-                fcc = len(rnode)
+                fcc = len(rnode) * 5
                 new_fps = Fraction(fpsnum * fcc * 2, int(fcc * fpsden * asd),)
-
+                
                 rnode = vs.core.std.AssumeFPS(rnode, fpsnum=new_fps.numerator, fpsden=new_fps.denominator)
 
-                timecodes = [float(1.0 / rnode.fps) for _ in range(len(rnode))]
+                #timecodes = [float(1.0 / rnode.fps) for _ in range(len(rnode))]
+                #durationcodes = timecodes
+                #absolutetime = absolute_time_from_timecode(timecodes)
+                #stiff do timecodes like rff1 because it would break otherwise
+                timecodes = [Fraction(fpsden * (a + 2), fpsnum * 2) for a in rff]
+                durationcodes = timecodes
                 absolutetime = absolute_time_from_timecode(timecodes)
+
+
 
         changes = []
         for a in range(1, len(vobids)):
@@ -805,7 +850,7 @@ class IsoFileCore:
 
         dvnavchapters = double_check_dvdnav(self.iso_path, title_nr)
 
-        if dvnavchapters is not None and (rff_mode == 0 or rff_mode == 2):
+        if dvnavchapters is not None:# and (rff_mode == 0 or rff_mode == 2):
             # ???????
             if fpsden == 1001:
                 dvnavchapters = [a * 1.001 for a in dvnavchapters]
@@ -860,7 +905,7 @@ class IsoFileCore:
                 audios += ["none"]
 
         return Title(rnode, output_chapters, changes, self, title_nr, title_set_nr,
-                      vobidcellids_to_take, dvdsrc_ranges, absolutetime, audios, patched_end_chapter)
+                      vobidcellids_to_take, dvdsrc_ranges, absolutetime, durationcodes, audios, patched_end_chapter)
 
     def _d2v_collect_all_frameflags(self, title_set_nr: int) -> Sequence[int]:
         files = self._get_title_vob_files_for_vts(title_set_nr)
