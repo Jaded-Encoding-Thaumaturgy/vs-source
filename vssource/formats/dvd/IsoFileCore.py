@@ -1,24 +1,25 @@
 from __future__ import annotations
 from dataclasses import dataclass
-import os
-import datetime
 from abc import abstractmethod
 from fractions import Fraction
 from typing import List, Sequence, Tuple
-
 from vstools import CustomValueError, SPath, vs, set_output
+from functools import partial
+
+import io
+import json
+import os
+import datetime
 
 from ...indexers import D2VWitch, DGIndex, ExternalIndexer
-import json
-from functools import partial
 from ...rff import apply_rff_array, apply_rff_video, cut_array_on_ranges, cut_node_on_ranges
-from ...a52 import a52_syncinfo
 from .parsedvd.ifo import IFO0, IFOX
-import jsondiff
-import hashlib
-from .mpeg import *
-import io
-        
+
+DVD_DEBUG =  "DVD_DEBUG" in os.environ
+
+def debug_print(*args, **kwargs):
+    if DVD_DEBUG:
+        print(*args,**kwargs)
 
 __all__ = [
     'IsoFileCore', 'Title'
@@ -65,11 +66,11 @@ class SplitTitle:
     chapters: List[int]
 
     _title: Title
-    _splits: List[int]
-    _index: int
+    _split_chpts: Tuple[int,int]#inclusive inclusive
 
-#    def split_ac3(self, i: int = 0) -> Tuple[str, float]:
-#        return SplitHelper.split_ac3(self._title, self._splits, i)[self._index]
+    def ac3(self, outfile: str, audio_i: int = 0) -> Tuple[str,float]:
+        a = self._split_chpts
+        return SplitHelper.split_range_ac3(self._title,a[0],a[1],audio_i,outfile)
 
     def __repr__(self) -> str:
         #TODO: use absolutetime from title
@@ -123,7 +124,6 @@ class Title:
                 audio = [audio]
             audio_per_output_cnt = len(audio)
 
-
             auds = []
             for a in audio:
                 auds += [SplitHelper.split_audio(self,splits,a)]
@@ -136,6 +136,13 @@ class Title:
                     lst += [auds[j][i]]
                 audios += [lst]
 
+        fromy = 1
+        from_to_s = []
+        for j in splits:
+            from_to_s +=[ (fromy,j-1)]
+            fromy = j
+        from_to_s += [(fromy, len(self.chapters)-1)]
+
         reta = []
         for i in range(output_cnt):
             a = None
@@ -144,7 +151,7 @@ class Title:
                 if len(a) == 1:
                     a = a[0]
             
-            reta += [SplitTitle(video[i], a, chapters[i], self, splits, i)]
+            reta += [SplitTitle(video[i], a, chapters[i], self,from_to_s[i])]
 
         if len(reta) == 1:
             return reta[0]
@@ -175,7 +182,6 @@ class Title:
         
         if t == len(self.chapters)-1:
             return self.split([f],audio)[1]
-        
         return self.split([f,t+1],audio)[1]
 
     def preview(self, splt = None):
@@ -207,20 +213,24 @@ class Title:
         prps = anode.get_frame(0).props
         strt = (prps["Stuff_Start_PTS"] * anode.sample_rate) / 90_000
         endd = (prps["Stuff_End_PTS"] * anode.sample_rate) / 90_000
-        print("splice", round((strt / anode.sample_rate) * 1000 * 10) / 10,"ms", round((endd / anode.sample_rate) * 1000 * 10) / 10, "ms")
+        debug_print("splice", round((strt / anode.sample_rate) * 1000 * 10) / 10,"ms", round((endd / anode.sample_rate) * 1000 * 10) / 10, "ms")
         strt = int(strt)
         endd = int(endd)
         anode = anode[strt:len(anode)-endd]
 
         total_dura = (self._absolute_time[-1] + self._duration_times[-1])
         delta = abs(total_dura - anode.num_samples / anode.sample_rate) * 1000
-        print(f"delta {delta} ms")
+
+        debug_print(f"delta {delta} ms")
+
         if delta > 50:
-            print(f"WARNING rather big audio/video lenght delta might be indecator that sth is off {delta}")
+            debug_print(f"WARNING rather big audio/video lenght delta might be indecator that sth is off {delta}")
 
         return anode
 
     def assert_dvdsrc2(self):
+        if self._dvdsrc_ranges is None or len(self._dvdsrc_ranges) == 0:
+            raise CustomValueError(f"Title needts to be opened with dvdsrc2", __class__)
         if self._core.use_dvdsrc != 2:
             raise CustomValueError(f"This feature requires dvdsrc2", __class__)
 
@@ -242,39 +252,6 @@ class Title:
             wrt.close()
 
         return float(p0["Stuff_Start_PTS"]) / 90_000
-
-    def split_range_ac3(self, f: int, t: int, audio_i: int,outfile: str) -> float:
-        nd = vs.core.dvdsrc2.RawAc3(self._core.iso_path, self._vts, audio_i, self._dvdsrc_ranges)
-        prps = nd.get_frame(0).props
-
-        strt = prps["Stuff_Start_PTS"]
-        #endd = prps["Stuff_End_PTS"]
-
-        raw_start = (self._absolute_time[self.chapters[f-1]] * 90_000)
-        raw_end   = ((self._absolute_time[self.chapters[t-1]] + self._duration_times[self.chapters[t-1]]) * 90_000)
-
-        start_pts = raw_start + strt
-        end_pts = (raw_end - raw_start)
-
-        audio_offset_pts = 0
-
-        outf = open(outfile,"wb")
-
-        i = start_pts / 2880
-        while i < len(nd):
-            pkt_start_pts = i * 2880
-            pkt_end_pts = (i+1) * 2880
-            if pkt_start_pts < strt:
-                audio_offset_pts = strt - pkt_start_pts
-            outf.write(bytes(nd.get_frame(i)[0]))
-            #print("LELELE",pkt_end_pts,end_pts)
-            if pkt_end_pts > end_pts:
-                break
-
-            i += 1
-        
-        print("offset is",(audio_offset_pts) / 90,"ms")
-        return audio_offset_pts / 90_000
 
     def __repr__(self) -> str:
         chapters = self.chapters + [len(self.node) - 1]
@@ -308,6 +285,46 @@ class Title:
 
 
 class SplitHelper:
+    def split_range_ac3(title: Title, f: int, t: int, audio_i: int, outfile: str) -> float:
+        nd = vs.core.dvdsrc2.RawAc3(title._core.iso_path, title._vts, audio_i, title._dvdsrc_ranges)
+        prps = nd.get_frame(0).props
+
+        strt = prps["Stuff_Start_PTS"]
+#       endd = prps["Stuff_End_PTS"]
+#       debug_print(f"Stuff_Start_PTS pts {strt} Stuff_End_PTS {endd}")
+        raw_start = (title._absolute_time[title.chapters[f-1]] * 90_000)
+        raw_end   = ((title._absolute_time[title.chapters[t]] + title._duration_times[title.chapters[t]]) * 90_000)
+
+        start_pts = raw_start + strt
+        end_pts = start_pts + (raw_end - raw_start)
+
+        audio_offset_pts = 0
+
+        outf = open(outfile,"wb")
+#       debug_print(f"start_pts  {start_pts} end_pts {end_pts}")
+
+        i = start_pts // 2880
+        
+        debug_print("first ",i,len(nd))
+
+        while i < len(nd):
+            pkt_start_pts = i * 2880
+            pkt_end_pts = (i+1) * 2880
+            
+            assert pkt_end_pts > start_pts
+            
+            if pkt_start_pts < start_pts:
+                audio_offset_pts = start_pts - pkt_start_pts
+            outf.write(bytes(nd.get_frame(i)[0]))
+
+            if pkt_end_pts > end_pts:
+                break
+
+            i += 1
+        debug_print("wrote",(i - (start_pts // 2880)))
+        debug_print("offset is",(audio_offset_pts) / 90,"ms")
+        return audio_offset_pts / 90_000
+
     def split_chapters(title: Title, splits: List[int]) -> Tuple[List[int]]:
         out = []
 
@@ -339,84 +356,6 @@ class SplitHelper:
         assert len(reta) == len(splits)+1
         return reta
 
-    def split_ac3(title: Title, splits: List[int], audio_i: int = 0) -> Tuple[Tuple[str, float]]:
-        title.assert_dvdsrc2()
-        if not title._audios[audio_i].startswith("ac3"):
-            raise CustomValueError(f"autio at {audio_i} is not ac3", __class__)
-
-        nd = vs.core.dvdsrc2.RawAc3(title._core.iso_path, title._vts, audio_i, title._dvdsrc_ranges)
-        p0 = nd.get_frame(0).props
-
-        bb = open(nn, "rb")
-
-        sr0 = None
-        buffer = bytearray()
-
-        ac3_sample_per_frame = 6 * 256
-        current_frame = 0
-
-        split_times = []
-        for a in splits:
-            split_times += [title._absolute_time[title.chapters[a - 1]]]
-
-        split_samples = None
-        current_split = 0
-        file_template = "{}.ac3"
-
-        last_frame_bytes = bytes()
-        files = []
-        sample_offsets = None
-
-        files += [os.path.join(title._core.output_folder, file_template.format(current_split))]
-        current_file = open(files[0], "wb")
-
-        while True:
-            byte = bb.read(8192)
-            buffer += byte
-            while True:
-                if len(buffer) == 0:
-                    break
-                ret = a52_syncinfo(buffer)
-                if sr0 is None:
-                    sr0 = ret.sample_rate
-                    split_samples = [a * sr0 for a in split_times]
-                    #sample_offsets = [ title._absolute_time[title.chapters[0]] * sr0 ]
-                    sample_offsets = [ title._absolute_time[title.chapters[0]] * sr0 + int(delay * sr0) ]
-                    #TODO: make it so it cuts off frames at the beginning instead of big delay if start is shifted
-                else:
-                    assert ret.sample_rate == sr0
-
-                if len(buffer) < ret.data_size:
-                    break
-                else:
-                    current_frame_bytes = bytes(buffer[0:ret.data_size])
-
-                    sample_start = current_frame * ac3_sample_per_frame
-                    sample_end = sample_start + ac3_sample_per_frame
-                    current_file.write(current_frame_bytes)
-                    if current_split < len(split_samples) and sample_end >= split_samples[current_split]:
-                        current_split += 1
-                        fp = os.path.join(title._core.output_folder, file_template.format(current_split))
-                        current_file = open(fp, "wb")
-                        current_file.write(last_frame_bytes)
-                        current_file.write(current_frame_bytes)
-                        sample_offsets += [round(ac3_sample_per_frame + (sample_end
-                                                 - split_samples[current_split - 1]))]
-                        files += [fp]
-
-                    buffer = buffer[ret.data_size:]
-                    last_frame_bytes = current_frame_bytes
-                    current_frame += 1
-
-            if len(byte) < 8192:
-                break
-        assert len(sample_offsets) == len(files)
-        time_offsets = [a / sr0 for a in sample_offsets]
-
-        reta =  [(files[i], time_offsets[i]) for i in range(len(files))]
-        assert len(reta) == len(splits)+1
-        return reta
-
     def _sanitize_splits(title: Title, splits: List[int]):
         # assert len(splits) >= 1
         assert isinstance(splits, list)
@@ -445,6 +384,9 @@ class SplitHelper:
         #  0 0 -> chapter 0
         f = title.chapters[f]
         t = title.chapters[t]
+        assert f >= 0
+        assert t <= len(vnode)-1
+        assert f <= t
         return vnode[f:t]
 
     def _cut_fz_a(title: Title, anode: vs.AudioNode, f: int, t: int) -> vs.AudioNode:
@@ -485,7 +427,6 @@ class IsoFileCore:
 
         self.has_dvdsrc1 = hasattr(vs.core, "dvdsrc")
         self.has_dvdsrc2 = hasattr(vs.core, "dvdsrc2")
-        self.has_dvdsrc = self.has_dvdsrc1
         self.use_dvdsrc = use_dvdsrc
 
         if self.use_dvdsrc is None:
@@ -499,22 +440,20 @@ class IsoFileCore:
         if isinstance(self.use_dvdsrc, bool):
             self.use_dvdsrc = 2 if self.use_dvdsrc else 0 
         
-        if use_dvdsrc == 1 and not self.has_dvdsrc1:
-            self.use_dvdsrc = 0
-            print("Requested dvdsrc1 but not installed")
-        if use_dvdsrc == 2 and not self.has_dvdsrc2:
-            self.use_dvdsrc = 0
-            print("Requested dvdsrc2 but not installed")
+        if use_dvdsrc == 1:
+            assert self.has_dvdsrc1
+        if use_dvdsrc == 2:
+            assert self.has_dvdsrc2
 
         self.iso_path = SPath(path).absolute()
 
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
             raise CustomValueError('"path" needs to point to a .ISO or a dir root of DVD', path, self.__class__)
 
+        #gather json structure
         if self.use_dvdsrc == 1:
             self.json = json.loads(vs.core.dvdsrc.Json(self.iso_path))
         else:
-
             self.json = {"ifos": []}
             
             fallback_ifostuff = False
@@ -538,7 +477,7 @@ class IsoFileCore:
                         self.json["ifos"] += [IFOX(a).crnt]
 
             if not self.has_dvdsrc1:
-                print("Does not have dvdsrc cant double check json with libdvdread")
+                debug_print("Does not have dvdsrc cant double check json with libdvdread")
             else:
                 dvdsrc_json = json.loads(vs.core.dvdsrc.Json(self.iso_path))
                 try:
@@ -560,6 +499,7 @@ class IsoFileCore:
                     open(os.path.join(self.output_folder, "a.json"), "wt").write(ja)
                     open(os.path.join(self.output_folder, "b.json"), "wt").write(jb)
 
+        if self.use_dvdsrc == 0:
             self.indexer = indexer if isinstance(indexer, ExternalIndexer) else indexer()
 
         self.title_count = len(self.json["ifos"][0]["tt_srpt"])
@@ -636,12 +576,12 @@ class IsoFileCore:
         pgc_programs = targte_pgc["program_map"]
 
         if title_programs[0] != 1 or pgc_programs[0] != 1:
-            print("Title does not start at the first cell")
+            print("WARNING Open PR Title does not start at the first cell")
 
         target_programs = [a[1] for a in list(filter(lambda x: (x[0] + 1) in title_programs, enumerate(pgc_programs)))]
 
         if target_programs != pgc_programs:
-            print("The program chain does not include all ptt's")
+            print("WARNING Open PR The program chain does not include all ptt's")
 
         vobidcellids_to_take = []
         current_angle = 1
@@ -697,12 +637,6 @@ class IsoFileCore:
                 vobids = exa.vobid
         elif self.use_dvdsrc == 2:
             admap = target_vts["vts_vobu_admap"]
-            def get_sectorranges_for_vobcellpair(current_vts: dict, pair_id: Tuple[int, int]) -> List[Tuple[int,int]]:
-                ranges = []
-                for e in current_vts["vts_c_adt"]:
-                    if e["cell_id"] == pair_id[1] and e["vob_id"] == pair_id[0]:
-                        ranges += [(e["start_sector"], e["last_sector"])]
-                return ranges
 
             all_ranges = []
             
@@ -716,7 +650,7 @@ class IsoFileCore:
                 except ValueError:
                     end_index = len(admap)-1
                 idxx += [start_index,end_index]
-            #print(idxx)
+
             rawnode = vs.core.dvdsrc2.FullVts(self.iso_path,vts=title_set_nr,ranges=idxx)
             staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
 
@@ -816,8 +750,6 @@ class IsoFileCore:
                 durationcodes = timecodes
                 absolutetime = absolute_time_from_timecode(timecodes)
 
-
-
         changes = []
         for a in range(1, len(vobids)):
             if vobids[a] != vobids[a - 1]:
@@ -872,7 +804,7 @@ class IsoFileCore:
                         print(dvnavchapters)
                         break
         else:
-            print("Skipping sanity check with dvdnav")
+            debug_print("Skipping sanity check with dvdnav")
 
         patched_end_chapter = None
         # only the chapter | are defined by dvd
@@ -944,13 +876,6 @@ class IsoFileCore:
 
         return vobidset
 
-    def __repr__(self) -> str:
-        to_print = f"Path: {self.iso_path}\n"
-        to_print += f"Mount: {self._mount_path}\n"
-        to_print += f"Titles: {self.title_count}"
-
-        return to_print.strip()
-
     def _get_title_vob_files_for_vts(self, vts: int) -> Sequence[SPath]:
         f1 = self.vob_files
         f1 = list(filter(lambda x: (("VTS_{:02}_".format(vts)) in str(x)), f1))
@@ -985,6 +910,13 @@ class IsoFileCore:
             vobids += [ ((dd[i*4+1] << 8) + dd[i*4+2], dd[i*4+3]) ]
         return AllNeddedDvdFrameData(vobids,tff,rff,prog,progseq)
 
+    def __repr__(self) -> str:
+        to_print = f"Path: {self.iso_path}\n"
+        to_print += f"Mount: {self._mount_path}\n"
+        to_print += f"Titles: {self.title_count}"
+
+        return to_print.strip()
+
     @property
     def mount_path(self) -> SPath:
         if self._mount_path is not None:
@@ -994,7 +926,6 @@ class IsoFileCore:
             return self._mount_folder_path()
 
         disc = self._get_mounted_disc() or self._mount()
-
         if not disc:
             raise RuntimeError("IsoFile: Couldn't mount ISO file!")
 

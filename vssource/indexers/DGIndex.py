@@ -32,6 +32,5 @@ class DGIndex(D2VWitch):
             "-IA=" + str(idct_algo), "-FO=" + str(field_op), "-YR=" + str(yuv_to_rgb),
             "-OM=0", "-OF=[" + str(output).replace(".d2v", "") + "]", "-HIDE", "-EXIT"
         ]))
-        print(lst)
 
         return lst

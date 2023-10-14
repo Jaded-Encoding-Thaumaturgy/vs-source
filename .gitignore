@@ -129,4 +129,5 @@ dmypy.json
 .pyre/
 
 test*.py
+sometests/
 .vspreview

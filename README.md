@@ -22,7 +22,9 @@ Optional dependecies:
 
 Getting a vs.AudioNode and demuxing ac3 **requires** [dvdsrc2](https://github.com/jsaowji/dvdsrc2/)
 
-The splits should behave just like mkvmerge chapter splits (split before the chapter, first chapter is 1)
+only audio offically suported yet: normal stereo 16bit lpcm or ac3
+
+The .split should behave just like mkvmerge chapter splits (split before the chapter, first chapter is 1)
 
 So if you want the (first chapter, all other chapters after) [2].
 
@@ -39,9 +41,6 @@ mpv --dvd-device=<iso> dvd://<title>
 
 Also helpful [mpv-dvd-browser](https://github.com/CogentRedTester/mpv-dvd-browser)
 
-It has not been tested throughly in production yet, so api, functionality, features and output is subject to change.
-
-Audio support is still flaky, one known problem is if a complete title does not contain any seamless cut, which is mostly not the case on main feature.
 
 <br><br>
 ## How to install
@@ -105,10 +104,8 @@ set_output([
 a = ep1.split_ac3(0)
 #a[0] contain path to ac3 file
 #a[1] contains in seconds of how much samples are there too much at the start
-```
 
 ## Advanced Usage
-```py
 
 # Remove junk from the end 
 t1 = iso.get_title(1)
