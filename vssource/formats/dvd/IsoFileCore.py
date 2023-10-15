@@ -68,7 +68,7 @@ class SplitTitle:
     _title: Title
     _split_chpts: Tuple[int,int]#inclusive inclusive
 
-    def ac3(self, outfile: str, audio_i: int = 0) -> Tuple[str,float]:
+    def ac3(self, outfile: str, audio_i: int = 0) -> float:
         a = self._split_chpts
         return SplitHelper.split_range_ac3(self._title,a[0],a[1],audio_i,outfile)
 
@@ -972,7 +972,6 @@ class IsoFileCore:
     @abstractmethod
     def _mount(self) -> SPath | None:
         raise NotImplementedError()
-
 
 def get_sectors_from_vobids(target_vts: dict, vobidcellids_to_take: List[Tuple[int, int]]) -> List[int]:
     sectors = []

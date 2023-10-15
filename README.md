@@ -13,8 +13,13 @@ Required plugins:
 dgindex is recommended over d2vwitch because d2vwitch has problems.
 
 dgindex can be used under linux with wine and requires binfmt and dgindex in path
+
+
+```
 chmod +x DGIndex.exe
 sudo ln -s $(pwd)/DGIndex.exe /usr/bin/dgindex
+```
+
 
 Optional dependecies:
 - The Chapters can be automatically be checked against libdvdnav using [dvdsrc_dvdnav_title_ptt_test](https://gist.github.com/jsaowji/2bbf9c776a3226d1272e93bb245f7538)
@@ -101,9 +106,8 @@ set_output([
     ep1.audio,
 ])
 
-a = ep1.split_ac3(0)
-#a[0] contain path to ac3 file
-#a[1] contains in seconds of how much samples are there too much at the start
+a = ep1.ac3("/tmp/ep1.ac3",0)
+#a is in seconds of how much samples are there too much at the start
 
 ## Advanced Usage
 
