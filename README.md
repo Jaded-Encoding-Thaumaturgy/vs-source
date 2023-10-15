@@ -68,7 +68,8 @@ $ pip install git+https://github.com/Irrational-Encoding-Wizardry/vs-source.git
 After installation, functions can be loaded and used as follows:
 
 ```py
-from vssource import IsoFile, DGIndex
+
+from vssource import IsoFile
 from vstools import set_output
 
 # Autodetect what to index with
@@ -117,13 +118,22 @@ t1.chapters[-1] -= 609
 t1.preview(t1.split([7,12]))
 
 
+#--------
+
+splts = []
 #title 2 through 5 containe episodes
 #remove "junk" from beginning
 #you can quickly check with preview
 for a in range(2,6):
     t = iso.get_title(a)
     t.chapters[0] += 180
-    t.preview(t.split([]))
+    splts += [t.split([])]
+    t.preview(splts[-1])
+
+print(splts[0].ac3("/tmp/ep1.ac3"))
+#0.019955555555555556
+
+#--------
 
 # multi angle + multi audio + rff mode
 #japanese
@@ -139,5 +149,4 @@ b = iso.get_title(4, angle_nr=2, rff_mode=2).split([5,10,15],audio=0)
 # ep 2 italian
 b[1].video.set_output(0)
 b[1].audio.set_output(1)
-
 ```

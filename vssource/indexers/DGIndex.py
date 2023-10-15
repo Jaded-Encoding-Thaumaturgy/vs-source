@@ -9,6 +9,8 @@ __all__ = [
 ]
 
 import shutil
+
+
 class DGIndex(D2VWitch):
     _bin_path = 'dgindex'
     _ext = 'd2v'
@@ -22,11 +24,11 @@ class DGIndex(D2VWitch):
 
         if is_linux:
             output = SPath("Z:\\" + str(output)[1:])
-            files = [ subprocess.check_output(['winepath', '-w',f]).decode("utf-8").strip()  for f in files]
-        
+            files = [subprocess.check_output(['winepath', '-w', f]).decode("utf-8").strip() for f in files]
+
         for f in files:
             assert not (" " in f)
-        lst =  list(map(str, [
+        lst = list(map(str, [
             self._get_bin_path(),
             "-IF=[" + ','.join([f'{str(path)}' for path in files]) + ']',
             "-IA=" + str(idct_algo), "-FO=" + str(field_op), "-YR=" + str(yuv_to_rgb),
