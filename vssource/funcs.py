@@ -5,7 +5,8 @@ from typing import Any, Literal, Protocol, Sequence, overload
 
 from vstools import (
     ChromaLocationT, ColorRangeT, CustomRuntimeError, FieldBasedT, FileType, FileTypeMismatchError, IndexingType,
-    MatrixT, PrimariesT, SPath, SPathLike, TransferT, check_perms, copy_signature, initialize_clip, match_clip, to_arr, vs
+    MatrixT, PrimariesT, SPath, SPathLike, TransferT, check_perms, copy_signature, initialize_clip, match_clip, to_arr,
+    vs
 )
 
 from .indexers import IMWRI, LSMAS, BestSource, D2VWitch, DGIndex, DGIndexNV, Indexer
