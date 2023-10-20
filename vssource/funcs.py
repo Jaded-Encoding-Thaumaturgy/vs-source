@@ -5,10 +5,36 @@ from typing import Any, Literal, Protocol, Sequence, overload
 
 from vstools import (
     ChromaLocationT, ColorRangeT, CustomRuntimeError, FieldBasedT, FileType, FileTypeMismatchError, IndexingType,
-    MatrixT, PrimariesT, SPath, SPathLike, TransferT, check_perms, copy_signature, initialize_clip, match_clip, to_arr, vs
+    MatrixT, ParsedFile, PrimariesT, SPath, SPathLike, TransferT, check_perms, copy_signature, initialize_clip,
+    match_clip, to_arr, vs
 )
 
 from .indexers import IMWRI, LSMAS, BestSource, D2VWitch, DGIndex, DGIndexNV, Indexer
+
+__all__ = [
+    'parse_video_filepath',
+    'source'
+]
+
+
+def parse_video_filepath(filepath: SPathLike | Sequence[SPathLike]) -> tuple[SPath, ParsedFile]:
+    filepath = next(iter(Indexer.normalize_filenames(filepath)))
+    check_perms(filepath, 'r', func=source)
+
+    file = FileType.parse(filepath) if filepath.exists() else None
+
+    def _check_file_type(file_type: FileType) -> bool:
+        return file_type in (FileType.VIDEO, FileType.IMAGE) or file_type.is_index()
+
+    if not file or not _check_file_type(FileType(file.file_type)):
+        for itype in IndexingType:
+            if (newpath := filepath.with_suffix(f'{filepath.suffix}{itype.value}')).exists():
+                file = FileType.parse(newpath)
+
+    if not file or not _check_file_type(FileType(file.file_type)):
+        raise FileTypeMismatchError('File isn\'t a video or image file!', source)
+
+    return filepath, file
 
 
 class source_func(Protocol):
@@ -97,21 +123,7 @@ def source(
     clip = None
     film_thr = float(min(100, film_thr))
 
-    filepath = next(iter(Indexer.normalize_filenames(filepath)))
-    check_perms(filepath, 'r', func=source)
-
-    file = FileType.parse(filepath) if filepath.exists() else None
-
-    def _check_file_type(file_type: FileType) -> bool:
-        return file_type in (FileType.VIDEO, FileType.IMAGE) or file_type.is_index  # type: ignore
-
-    if not file or not _check_file_type(FileType(file.file_type)):
-        for itype in IndexingType:
-            if (newpath := filepath.with_suffix(f'{filepath.suffix}{itype.value}')).exists():
-                file = FileType.parse(newpath)
-
-    if not file or not _check_file_type(FileType(file.file_type)):
-        raise FileTypeMismatchError('File isn\'t a video or image file!', source)
+    filepath, file = parse_video_filepath(filepath)
 
     props = dict[str, Any]()
 
