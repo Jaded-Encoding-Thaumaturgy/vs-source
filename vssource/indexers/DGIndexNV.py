@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fractions import Fraction
 from functools import lru_cache, reduce
+import os
 from typing import Sequence
 
 from vstools import SPath, core
@@ -101,7 +102,8 @@ class DGIndexNV(ExternalIndexer):
                     header.aspect = Fraction(*list(map(int, values)))
                 except ZeroDivisionError:
                     header.aspect = Fraction(1, 1)
-                    print(ResourceWarning('Encountered video with 0/0 aspect ratio!'))
+                    if os.environ.get('VSSOURCE_DEBUG', False):
+                        print(ResourceWarning('Encountered video with 0/0 aspect ratio!'))
             elif key == 'COLORIMETRY':
                 header.colorimetry = tuple(map(int, values))
             elif key == 'PKTSIZ':

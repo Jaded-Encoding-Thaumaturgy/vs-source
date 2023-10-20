@@ -120,7 +120,7 @@ class VTSPGCI(Sector):
                     self.ifo.seek(offset + cell_start, os.SEEK_SET)
                     cell_type = self.ifo.read(4)[0] >> 6
 
-                    if cell_type in {0x02, 0x03}:
+                    if cell_type in {0x02, 0x03} and os.environ.get('VSSOURCE_DEBUG', False):
                         print('found different angle block:', cell_type)
 
                     self.ifo.seek(offset + cell_start + 0x0004, os.SEEK_SET)
