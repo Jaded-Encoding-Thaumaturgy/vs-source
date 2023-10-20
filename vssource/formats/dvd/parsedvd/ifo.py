@@ -16,12 +16,12 @@ class IFO0(SectorReadHelper):
 
         tt_srpt = []
         for a in range(num):
-            type, nr_of_angles, nr_of_ptts, parental, title_set_nr, vts_ttn, title_set_sector = self._unpack_byte([
-                                                                                                                  1, 1, 2, 2, 1, 1, 4])
+            # _ type _ parent
+            _, nr_of_angles, nr_of_ptts, _, title_set_nr, vts_ttn, sector = self._unpack_byte([1, 1, 2, 2, 1, 1, 4])
             entry = dict()
 
             entry["title_set_nr"] = title_set_nr
-            entry["title_set_sector"] = title_set_sector
+            entry["title_set_sector"] = sector
             entry["nr_of_angles"] = nr_of_angles
             entry["nr_of_ptts"] = nr_of_ptts
             entry["vts_ttn"] = vts_ttn

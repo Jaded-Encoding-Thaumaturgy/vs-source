@@ -8,8 +8,6 @@ __all__ = [
     'DGIndex'
 ]
 
-import shutil
-
 
 class DGIndex(D2VWitch):
     _bin_path = 'dgindex'

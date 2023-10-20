@@ -1,4 +1,4 @@
-from vstools import vs, core, SPath, normalize_list_to_ranges, FrameRange
+from vstools import vs, core, FrameRange
 from typing import List, Any
 from functools import partial
 from copy import deepcopy
@@ -9,7 +9,11 @@ __all__ = [
 ]
 
 
-def apply_rff_array(old_array: List[any], rff: List[int], tff: List[int], prog: List[int], prog_seq: List[int]) -> List[any]:
+def apply_rff_array(old_array: List[any],
+                    rff: List[int],
+                    tff: List[int],
+                    prog: List[int],
+                    prog_seq: List[int]) -> List[any]:
     array_double_rate = []
 
     for a in range(len(rff)):
@@ -42,7 +46,11 @@ def apply_rff_array(old_array: List[any], rff: List[int], tff: List[int], prog: 
     return array_return
 
 
-def apply_rff_video(node: vs.VideoNode, rff: List[int], tff: List[int], prog: List[int], prog_seq: List[int]) -> vs.VideoNode:
+def apply_rff_video(node: vs.VideoNode,
+                    rff: List[int],
+                    tff: List[int],
+                    prog: List[int],
+                    prog_seq: List[int]) -> vs.VideoNode:
     assert len(node) == len(rff) == len(tff) == len(prog) == len(prog_seq)
 
     fields = []

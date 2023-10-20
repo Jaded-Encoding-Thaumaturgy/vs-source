@@ -161,7 +161,8 @@ class Title:
             return reta[0]
         return tuple(reta)
 
-    def split_ranges(self, split: List[Tuple[int, int] | int], audio: List[int] | int | None = None) -> Tuple[SplitTitle, ...]:
+    def split_ranges(self, split: List[Tuple[int, int] | int],
+                     audio: List[int] | int | None = None) -> Tuple[SplitTitle, ...]:
         assert isinstance(split, list)
 
         return tuple([self.split_range(s[0], s[1], audio) for s in split])
@@ -235,14 +236,14 @@ class Title:
 
     def assert_dvdsrc2(self):
         if self._dvdsrc_ranges is None or len(self._dvdsrc_ranges) == 0:
-            raise CustomValueError(f"Title needts to be opened with dvdsrc2", __class__)
+            raise CustomValueError("Title needts to be opened with dvdsrc2", __class__)
         if self._core.use_dvdsrc != 2:
-            raise CustomValueError(f"This feature requires dvdsrc2", __class__)
+            raise CustomValueError("This feature requires dvdsrc2", __class__)
 
     def dump_ac3(self, a: str, audio_i: int = 0, only_calc_delay: bool = False) -> float:
         self.assert_dvdsrc2()
         if not self._audios[audio_i].startswith("ac3"):
-            raise CustomValueError(f"autio at {audio_i} is not ac3", __class__)
+            raise CustomValueError("autio at {audio_i} is not ac3", __class__)
 
         nd = vs.core.dvdsrc2.RawAc3(self._core.iso_path, self._vts, audio_i, self._dvdsrc_ranges)
         p0 = nd.get_frame(0).props
@@ -472,7 +473,8 @@ class IsoFileCore:
                     ifo0 = IFO0(io.BufferedReader(io.BytesIO(i0bytes)))
                     self.json["ifos"] += [ifo0.crnt]
                     for i in range(1, ifo0.num_vts + 1):
-                        self.json["ifos"] += [IFOX(io.BufferedReader(io.BytesIO(vs.core.dvdsrc2.Ifo(self.iso_path, i)))).crnt]
+                        rdr = io.BufferedReader(io.BytesIO(vs.core.dvdsrc2.Ifo(self.iso_path, i)))
+                        self.json["ifos"] += [IFOX(rdr).crnt]
 
             if not self.has_dvdsrc2 or fallback_ifostuff:
                 for i, a in enumerate(self.ifo_files):
@@ -529,7 +531,11 @@ class IsoFileCore:
             if d2v_our_rff:
                 rawnode = vs.core.dvdsrc2.FullVts(self.iso_path, vts=title_set_nr)
                 staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
-                return apply_rff_video(self.indexer._source_func(index_file, rff=False), staff.rff, staff.tff, staff.prog, staff.progseq)
+                return apply_rff_video(self.indexer._source_func(index_file, rff=False),
+                                       staff.rff,
+                                       staff.tff,
+                                       staff.prog,
+                                       staff.progseq)
             else:
                 return self.indexer._source_func(index_file, rff=True)
         else:
@@ -627,8 +633,6 @@ class IsoFileCore:
             except ImportError:
                 raise CustomValueError('For dvdsrc only features pydvdsrc python file needs to be installed', __file__)
 
-            import pydvdsrc
-
             sectors = pydvdsrc.get_sectors_from_vobids(target_vts, vobidcellids_to_take)
             rawnode = vs.core.dvdsrc.FullM2V(self.iso_path, vts=title_set_nr, domain=1, sectors=sectors)
             exa = pydvdsrc.DVDSRCM2vInfoExtracter(rawnode)
@@ -674,7 +678,8 @@ class IsoFileCore:
 
             if len(dvddd.keys()) == 1 and (0, 0) in dvddd.keys():
                 raise CustomValueError(
-                    'Youre indexer created a d2v file with only zeros for vobid cellid; This usually means outdated/unpatched D2Vwitch', self.__class__)
+                    'Youre indexer created a d2v file with only zeros for vobid cellid; '
+                    'This usually means outdated/unpatched D2Vwitch', self.__class__)
 
             frameranges = []
             for a in vobidcellids_to_take:
