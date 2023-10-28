@@ -5,6 +5,5 @@
   "python.linting.mypyEnabled": true,
   "python.linting.pydocstyleArgs": ["--ignore=None"],
   "python.analysis.memory.keepLibraryAst": true,
-  "python.linting.pylintEnabled": false,
-  "python.analysis.typeCheckingMode": "basic"
+  "python.linting.pylintEnabled": false
 }
