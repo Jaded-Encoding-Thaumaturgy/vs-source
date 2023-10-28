@@ -1,6 +1,10 @@
-from .sector import SectorReadHelper
+from __future__ import annotations
+
 import os
+
 from vstools import Region
+
+from .sector import SectorReadHelper
 
 
 class IFO0(SectorReadHelper):

@@ -2,7 +2,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from abc import abstractmethod
 from fractions import Fraction
-from typing import List, Sequence, Tuple
+from typing import Sequence
 from vstools import CustomValueError, SPath, vs, set_output
 from functools import partial
 
@@ -56,21 +56,21 @@ def absolute_time_from_timecode(timecodes):
 
 @dataclass
 class AllNeddedDvdFrameData:
-    vobids: List[int]
-    tff: List[int]
-    rff: List[int]
-    prog: List[int]
-    progseq: List[int]
+    vobids: list[int]
+    tff: list[int]
+    rff: list[int]
+    prog: list[int]
+    progseq: list[int]
 
 
 @dataclass
 class SplitTitle:
     video: vs.VideoNode
-    audio: vs.AudioNode | List[vs.AudioNode] | None
-    chapters: List[int]
+    audio: vs.AudioNode | list[vs.AudioNode] | None
+    chapters: list[int]
 
     _title: Title
-    _split_chpts: Tuple[int, int]  # inclusive inclusive
+    _split_chpts: tuple[int, int]  # inclusive inclusive
 
     def ac3(self, outfile: str, audio_i: int = 0) -> float:
         a = self._split_chpts
@@ -103,22 +103,22 @@ class SplitTitle:
 @dataclass
 class Title:
     node: vs.VideoNode
-    chapters: List[int]
+    chapters: list[int]
 
     # only for reference for gui or sth
-    cell_changes: List[int]
+    cell_changes: list[int]
 
     _core: IsoFileCore
     _title: int
     _vts: int
-    _vobidcellids_to_take: List[Tuple[int, int]]
-    _dvdsrc_ranges: List[int]
-    _absolute_time: List[float]
-    _duration_times: List[float]
-    _audios: List[str]
+    _vobidcellids_to_take: list[tuple[int, int]]
+    _dvdsrc_ranges: list[int]
+    _absolute_time: list[float]
+    _duration_times: list[float]
+    _audios: list[str]
     _patched_end_chapter: int | None
 
-    def split(self, splits: List[int], audio: List[int] | int | None = None) -> Tuple[SplitTitle, ...] | SplitTitle:
+    def split(self, splits: list[int], audio: list[int] | int | None = None) -> tuple[SplitTitle, ...] | SplitTitle:
         output_cnt = SplitHelper._sanitize_splits(self, splits)
         video = SplitHelper.split_video(self, splits)
         chapters = SplitHelper.split_chapters(self, splits)
@@ -161,13 +161,13 @@ class Title:
             return reta[0]
         return tuple(reta)
 
-    def split_ranges(self, split: List[Tuple[int, int] | int],
-                     audio: List[int] | int | None = None) -> Tuple[SplitTitle, ...]:
+    def split_ranges(self, split: list[tuple[int, int] | int],
+                     audio: list[int] | int | None = None) -> tuple[SplitTitle, ...]:
         assert isinstance(split, list)
 
         return tuple([self.split_range(s[0], s[1], audio) for s in split])
 
-    def split_range(self, f: int, t: int, audio: List[int] | int | None = None) -> SplitTitle:
+    def split_range(self, f: int, t: int, audio: list[int] | int | None = None) -> SplitTitle:
         '''
         starting from 1
 
@@ -331,7 +331,7 @@ class SplitHelper:
         debug_print("offset is", (audio_offset_pts) / 90, "ms")
         return audio_offset_pts / 90_000
 
-    def split_chapters(title: Title, splits: List[int]) -> Tuple[List[int]]:
+    def split_chapters(title: Title, splits: list[int]) -> tuple[list[int]]:
         out = []
 
         rebase = title.chapters[0]  # normally 0
@@ -351,17 +351,17 @@ class SplitHelper:
         assert len(out) == len(splits) + 1
         return out
 
-    def split_video(title: Title, splits: List[int]) -> Tuple[vs.VideoNode, ...]:
+    def split_video(title: Title, splits: list[int]) -> tuple[vs.VideoNode, ...]:
         reta = SplitHelper._cut_split(title, splits, title.node, SplitHelper._cut_fz_v)
         assert len(reta) == len(splits) + 1
         return reta
 
-    def split_audio(title: Title, splits: List[int], i: int = 0) -> Tuple[vs.AudioNode, ...]:
+    def split_audio(title: Title, splits: list[int], i: int = 0) -> tuple[vs.AudioNode, ...]:
         reta = SplitHelper._cut_split(title, splits, title.audio(i), SplitHelper._cut_fz_a)
         assert len(reta) == len(splits) + 1
         return reta
 
-    def _sanitize_splits(title: Title, splits: List[int]):
+    def _sanitize_splits(title: Title, splits: list[int]):
         # assert len(splits) >= 1
         assert isinstance(splits, list)
         lasta = -1
@@ -372,7 +372,7 @@ class SplitHelper:
             lasta = a
         return len(splits) + 1
 
-    def _cut_split(title: Title, splits: List[int], a, b) -> Tuple[vs.VideoNode, ...]:
+    def _cut_split(title: Title, splits: list[int], a, b) -> tuple[vs.VideoNode, ...]:
         out = []
         last = 0
         for s in splits:
@@ -984,7 +984,7 @@ class IsoFileCore:
         raise NotImplementedError()
 
 
-def get_sectors_from_vobids(target_vts: dict, vobidcellids_to_take: List[Tuple[int, int]]) -> List[int]:
+def get_sectors_from_vobids(target_vts: dict, vobidcellids_to_take: list[tuple[int, int]]) -> list[int]:
     sectors = []
     for a in vobidcellids_to_take:
         for srange in get_sectorranges_for_vobcellpair(target_vts, a):
@@ -992,7 +992,7 @@ def get_sectors_from_vobids(target_vts: dict, vobidcellids_to_take: List[Tuple[i
     return sectors
 
 
-def get_sectorranges_for_vobcellpair(current_vts: dict, pair_id: Tuple[int, int]) -> List[Tuple[int, int]]:
+def get_sectorranges_for_vobcellpair(current_vts: dict, pair_id: tuple[int, int]) -> list[tuple[int, int]]:
     ranges = []
     for e in current_vts["vts_c_adt"]:
         if e["vob_id"] == pair_id[0] and e["cell_id"] == pair_id[1]:

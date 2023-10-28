@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import NamedTuple, Union, List
+from typing import NamedTuple, Union
 
 from vstools import SPath
 
@@ -58,7 +58,7 @@ class D2VIndexFrameData(IndexFileFrameData):
     info: int
     skip: int
     position: int
-    frameflags: List[int]
+    frameflags: list[int]
 
 
 @dataclass

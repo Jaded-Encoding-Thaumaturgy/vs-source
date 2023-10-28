@@ -1,14 +1,13 @@
 from __future__ import annotations
 
+import os
 from abc import ABC, abstractmethod
 from io import BufferedReader
 from pprint import pformat
 from struct import unpack
-from typing import Any, List
+from typing import Any
 
 from vstools import SPath, SPathLike
-
-import os
 
 __all__ = [
     'SectorReadHelper',
@@ -45,11 +44,11 @@ class SectorReadHelper(ABC):
     def _load(self) -> None:
         ...
 
-    def _seek_unpack_byte(self, addr: int, n: int | List[int]) -> tuple[Any, ...]:
+    def _seek_unpack_byte(self, addr: int, n: int | list[int]) -> tuple[Any, ...]:
         self.ifo.seek(addr, os.SEEK_SET)
         return self._unpack_byte(n)
 
-    def _unpack_byte(self, n: int | List[int]) -> tuple[Any, ...]:
+    def _unpack_byte(self, n: int | list[int]) -> tuple[Any, ...]:
         stra = ">"
 
         if isinstance(n, int):

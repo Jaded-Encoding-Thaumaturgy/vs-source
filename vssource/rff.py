@@ -1,7 +1,10 @@
-from vstools import vs, core, FrameRange
-from typing import List, Any
-from functools import partial
+from __future__ import annotations
+
 from copy import deepcopy
+from functools import partial
+from typing import Any
+
+from vstools import FrameRange, core, vs
 
 __all__ = [
     'apply_rff_array', 'apply_rff_video',
@@ -9,11 +12,9 @@ __all__ = [
 ]
 
 
-def apply_rff_array(old_array: List[any],
-                    rff: List[int],
-                    tff: List[int],
-                    prog: List[int],
-                    prog_seq: List[int]) -> List[any]:
+def apply_rff_array(
+    old_array: list[Any], rff: list[int], tff: list[int], prog: list[int], prog_seq: list[int]
+) -> list[Any]:
     array_double_rate = []
 
     for a in range(len(rff)):
@@ -46,11 +47,9 @@ def apply_rff_array(old_array: List[any],
     return array_return
 
 
-def apply_rff_video(node: vs.VideoNode,
-                    rff: List[int],
-                    tff: List[int],
-                    prog: List[int],
-                    prog_seq: List[int]) -> vs.VideoNode:
+def apply_rff_video(
+    node: vs.VideoNode, rff: list[int], tff: list[int], prog: list[int], prog_seq: list[int]
+) -> vs.VideoNode:
     assert len(node) == len(rff) == len(tff) == len(prog) == len(prog_seq)
 
     fields = []
@@ -122,7 +121,7 @@ def apply_rff_video(node: vs.VideoNode,
     return woven
 
 
-def cut_array_on_ranges(array: List[Any], ranges: List[FrameRange]) -> List[Any]:
+def cut_array_on_ranges(array: list[Any], ranges: list[FrameRange]) -> list[Any]:
     remap_frames = tuple[int, ...]([
         x for y in [
             range(rrange[0], rrange[1] + 1) for rrange in ranges
@@ -134,7 +133,7 @@ def cut_array_on_ranges(array: List[Any], ranges: List[FrameRange]) -> List[Any]
     return newarray
 
 
-def cut_node_on_ranges(node: vs.VideoNode, ranges: List[FrameRange]) -> vs.VideoNode:
+def cut_node_on_ranges(node: vs.VideoNode, ranges: list[FrameRange]) -> vs.VideoNode:
     remap_frames = tuple[int, ...]([
         x for y in [
             range(rrange[0], rrange[1] + 1) for rrange in ranges
@@ -143,7 +142,7 @@ def cut_node_on_ranges(node: vs.VideoNode, ranges: List[FrameRange]) -> vs.Video
     return clip_remap_frames(node, remap_frames)
 
 
-def clip_remap_frames(node: vs.VideoNode, remap_frames) -> vs.VideoNode:  # remap_frames: List[int]
+def clip_remap_frames(node: vs.VideoNode, remap_frames) -> vs.VideoNode:  # remap_frames: list[int]
     blank = node.std.BlankClip(length=len(remap_frames))
 
     def noname(n, target_node, targetremap_frames):

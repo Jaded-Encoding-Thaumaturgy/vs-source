@@ -1,9 +1,9 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
-import os
 from abc import ABC, abstractmethod
 from hashlib import md5
 from os import name as os_name
@@ -56,8 +56,8 @@ class Indexer(ABC):
         return md5(to_hash).hexdigest()
 
     @classmethod
-    def source_func(self, path: DataType | SPathLike, *args: Any, **kwargs: Any) -> vs.VideoNode:
-        return self._source_func(str(path), *args, **kwargs)
+    def source_func(cls, path: DataType | SPathLike, *args: Any, **kwargs: Any) -> vs.VideoNode:
+        return cls._source_func(str(path), *args, **kwargs)
 
     @classmethod
     def normalize_filenames(cls, file: SPathLike | Sequence[SPathLike]) -> list[SPath]:
