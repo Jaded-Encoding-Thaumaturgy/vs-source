@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import NamedTuple, Union
+from typing import Union
 
 from vstools import SPath
 
@@ -10,12 +10,6 @@ from vstools import SPath
 class _SetItemMeta:
     def __setitem__(self, key: str, value: float | int) -> None:
         return self.__setattr__(key, value)
-
-
-class IndexFileVideo(NamedTuple):
-    path: SPath
-    size: int
-    num_frames: int
 
 
 @dataclass
@@ -30,7 +24,6 @@ class IndexFileFrameData(_SetItemMeta):
 class _IndexFileInfoBase(_SetItemMeta):
     path: SPath
     file_idx: int
-    videos: list[IndexFileVideo]
 
 
 @dataclass

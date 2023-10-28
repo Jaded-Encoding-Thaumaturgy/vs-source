@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from abc import abstractmethod
 from fractions import Fraction
 from typing import Sequence
-from vstools import CustomValueError, SPath, vs, set_output
+from vstools import CustomValueError, SPath, vs, set_output, remap_frames
 from functools import partial
 
 import io
@@ -12,7 +12,7 @@ import os
 import datetime
 
 from ...indexers import D2VWitch, DGIndex, ExternalIndexer
-from ...rff import apply_rff_array, apply_rff_video, cut_array_on_ranges, cut_node_on_ranges
+from ...rff import apply_rff_array, apply_rff_video, cut_array_on_ranges
 from .parsedvd.ifo import IFO0, IFOX
 
 DVD_DEBUG = "DVD_DEBUG" in os.environ
@@ -640,7 +640,7 @@ class IsoFileCore:
 
             if not disable_rff:
                 rnode = apply_rff_video(rawnode, exa.rff, exa.tff, exa.prog, exa.prog_seq)
-                vobids = apply_rff_array(exa.vobid, exa.rff, exa.tff, exa.prog, exa.prog_seq)
+                vobids = apply_rff_array(exa.vobid, exa.rff, exa.tff, exa.prog_seq)
             else:
                 rnode = rawnode
                 vobids = exa.vobid
@@ -665,7 +665,7 @@ class IsoFileCore:
 
             if not disable_rff:
                 rnode = apply_rff_video(rawnode, staff.rff, staff.tff, staff.prog, staff.progseq)
-                vobids = apply_rff_array(staff.vobids, staff.rff, staff.tff, staff.prog, staff.progseq)
+                vobids = apply_rff_array(staff.vobids, staff.rff, staff.tff, staff.progseq)
             else:
                 rnode = rawnode
                 vobids = staff.vobids
@@ -694,7 +694,7 @@ class IsoFileCore:
 
             fflags = cut_array_on_ranges(fflags, frameranges)
             vobids = cut_array_on_ranges(vobids, frameranges)
-            node = cut_node_on_ranges(node, frameranges)
+            node = remap_frames(node, frameranges)
 
             rff = [(a & 1) for a in fflags]
 
@@ -707,7 +707,7 @@ class IsoFileCore:
                 tff = [int(a) for a in tff]
 
                 rnode = apply_rff_video(node, rff, tff, prog, progseq)
-                vobids = apply_rff_array(vobids, rff, tff, prog, progseq)
+                vobids = apply_rff_array(vobids, rff, tff, progseq)
             else:
                 rnode = node
                 vobids = vobids
@@ -832,22 +832,23 @@ class IsoFileCore:
         for i, a in enumerate(targte_pgc["audio_control"]):
             if a["available"]:
                 audo = target_vts["vtsi_mat"]["vts_audio_attr"][i]
-                if audo["audio_format"] == 0:
-                    format = "ac3"
-                elif audo["audio_format"] == 4:
-                    format = "lpcm"
-                else:
-                    format = "unk"
-                format += "("
-                format += audo["language"]
-                format += ")"
 
-                audios += [format]
+                if audo["audio_format"] == 0:
+                    aformat = "ac3"
+                elif audo["audio_format"] == 4:
+                    aformat = "lpcm"
+                else:
+                    aformat = "unk"
+
+                audios += [f'{aformat}({audo["language"]})']
             else:
                 audios += ["none"]
 
-        return Title(rnode, output_chapters, changes, self, title_nr, title_set_nr,
-                     vobidcellids_to_take, dvdsrc_ranges, absolutetime, durationcodes, audios, patched_end_chapter)
+        return Title(
+            rnode, output_chapters, changes, self, title_nr, title_set_nr,
+            vobidcellids_to_take, dvdsrc_ranges, absolutetime, durationcodes,
+            audios, patched_end_chapter
+        )
 
     def _d2v_collect_all_frameflags(self, title_set_nr: int) -> Sequence[int]:
         files = self._get_title_vob_files_for_vts(title_set_nr)

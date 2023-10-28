@@ -5,7 +5,6 @@ from abc import ABC, abstractmethod
 from io import BufferedReader
 from pprint import pformat
 from struct import unpack
-from typing import Any
 
 from vstools import SPath, SPathLike
 
@@ -15,6 +14,8 @@ __all__ = [
 
 
 class SectorReadHelper(ABC):
+    _byte_size_lut = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
+
     def __init__(self, ifo: SPathLike | BufferedReader) -> None:
         if not isinstance(ifo, BufferedReader):
             file = SPath(ifo)
@@ -26,39 +27,39 @@ class SectorReadHelper(ABC):
 
         try:
             self._load()
-        except Exception as e:
-            raise e
+        except Exception:
+            raise
         finally:
             if file is not None and self.ifo and not self.ifo.closed:
                 ifo.close()
 
-    def _goto_sector_ptr(self, pos: int):
+    def _goto_sector_ptr(self, pos: int) -> None:
         self.ifo.seek(pos, os.SEEK_SET)
-        ptr, = self._unpack_byte(4)
-        self.ifo.seek(ptr * 2048, os.SEEK_SET)
 
-    def __repr__(self) -> str:
-        return pformat(vars(self), sort_dicts=False)
+        ptr, = self._unpack_byte(4)
+
+        self.ifo.seek(ptr * 2048, os.SEEK_SET)
 
     @abstractmethod
     def _load(self) -> None:
         ...
 
-    def _seek_unpack_byte(self, addr: int, n: int | list[int]) -> tuple[Any, ...]:
+    def _seek_unpack_byte(self, addr: int, *n: int) -> tuple[int, ...]:
         self.ifo.seek(addr, os.SEEK_SET)
-        return self._unpack_byte(n)
+        return self._unpack_byte(*n)
 
-    def _unpack_byte(self, n: int | list[int]) -> tuple[Any, ...]:
-        stra = ">"
+    def _unpack_byte(self, *n: int, repeat: int = 1) -> tuple[int, ...]:
+        n_list = list(n) * repeat
 
-        if isinstance(n, int):
-            n = [n]
-        bytecnt = 0
-        for a in n:
-            bytecnt += a
-            stra += {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}.get(a, 'B')
+        bytecnt = sum(n_list)
+
+        stra = ">" + ''.join(self._byte_size_lut.get(a, 'B') for a in n_list)
 
         buf = self.ifo.read(bytecnt)
 
         assert len(buf) == bytecnt
+
         return unpack(stra, buf)
+
+    def __repr__(self) -> str:
+        return pformat(vars(self), sort_dicts=False)

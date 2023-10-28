@@ -6,7 +6,7 @@ from functools import lru_cache, partial
 
 from vstools import SPath, core
 
-from ..dataclasses import D2VIndexFileInfo, D2VIndexFrameData, D2VIndexHeader, IndexFileVideo
+from ..dataclasses import D2VIndexFileInfo, D2VIndexFrameData, D2VIndexHeader
 from .base import ExternalIndexer
 
 __all__ = [
@@ -60,10 +60,7 @@ class D2VWitch(ExternalIndexer):
         if "DGIndex" not in head[0]:
             self.file_corrupted(index_path)
 
-        vid_lines, lines = self._split_lines(lines)
-        raw_header, lines = self._split_lines(lines)
-
-        video_frame_lenghts = []
+        raw_header, lines = self._split_lines(self._split_lines(lines)[1])
 
         header = D2VIndexHeader()
 
@@ -98,11 +95,6 @@ class D2VWitch(ExternalIndexer):
             elif key == 'LOCATION':
                 header.location = list(map(partial(int, base=16), values))
 
-        videos = [
-            IndexFileVideo(path, path.stat().st_size, vidlen)
-            for path, vidlen in zip(map(SPath, vid_lines), video_frame_lenghts)
-        ]
-
         frame_data = []
 
         if file_idx >= 0:
@@ -121,8 +113,9 @@ class D2VWitch(ExternalIndexer):
 
                 frame_data.append(D2VIndexFrameData(
                     int(line[1]), 'I', int(line[5]),
-                    int(line[6]), bin(int(line[0], 16))[2:].zfill(8),
-                    int(line[4]), int(line[3])
+                    int(line[6]), int(line[0], 16),
+                    int(line[4]), int(line[3]),
+                    list(int(a, 16) for a in line[7:])
                 ))
         elif file_idx == -1:
             for rawline in lines:
@@ -135,8 +128,7 @@ class D2VWitch(ExternalIndexer):
                     int(line[1]), 'I', int(line[5]),
                     int(line[6]), int(line[0], 16),
                     int(line[4]), int(line[3]),
-
                     list(int(a, 16) for a in line[7:])
                 ))
 
-        return D2VIndexFileInfo(index_path, file_idx, videos, header, frame_data)
+        return D2VIndexFileInfo(index_path, file_idx, header, frame_data)

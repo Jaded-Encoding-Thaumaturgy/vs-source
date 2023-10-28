@@ -15,7 +15,7 @@ __all__ = [
 class DGIndex(D2VWitch):
     _bin_path = 'dgindex'
     _ext = 'd2v'
-    _source_func = core.lazy.d2v.Source  # type: ignore
+    _source_func = core.lazy.d2v.Source
 
     def get_cmd(
         self, files: list[SPath], output: SPath,
@@ -25,15 +25,16 @@ class DGIndex(D2VWitch):
 
         if is_linux:
             output = SPath("Z:\\" + str(output)[1:])
-            files = [subprocess.check_output(['winepath', '-w', f]).decode("utf-8").strip() for f in files]
+            paths = list(subprocess.check_output(['winepath', '-w', f]).decode('utf-8').strip() for f in files)
+        else:
+            paths = list(map(str, files))
 
-        for f in files:
-            assert not (" " in f)
-        lst = list(map(str, [
+        for f in paths:
+            assert ' ' not in f, "DGIndex only supports paths without spaces in them!"
+
+        return list(map(str, [
             self._get_bin_path(),
-            "-IF=[" + ','.join([f'{str(path)}' for path in files]) + ']',
-            "-IA=" + str(idct_algo), "-FO=" + str(field_op), "-YR=" + str(yuv_to_rgb),
-            "-OM=0", "-OF=[" + str(output).replace(".d2v", "") + "]", "-HIDE", "-EXIT"
+            "-IF=[" + ','.join([f'{p}' for p in paths]) + ']',
+            f"-IA={idct_algo}", f"-FO={field_op}", f"-YR={yuv_to_rgb}",
+            "-OM=0", f"-OF=[{output.with_suffix('')}]", "-HIDE", "-EXIT"
         ]))
-
-        return lst

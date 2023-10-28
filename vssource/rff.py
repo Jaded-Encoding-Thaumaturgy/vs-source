@@ -1,50 +1,36 @@
 from __future__ import annotations
 
+import warnings
 from copy import deepcopy
-from functools import partial
-from typing import Any
+from itertools import count
+from typing import Sequence
 
-from vstools import FrameRange, core, vs
+from vstools import CustomRuntimeError, T, flatten, remap_frames, vs
 
 __all__ = [
     'apply_rff_array', 'apply_rff_video',
-    'cut_array_on_ranges', 'cut_node_on_ranges',
+    'cut_array_on_ranges'
 ]
 
 
-def apply_rff_array(
-    old_array: list[Any], rff: list[int], tff: list[int], prog: list[int], prog_seq: list[int]
-) -> list[Any]:
-    array_double_rate = []
+def apply_rff_array(old_array: Sequence[T], rff: Sequence[int], tff: Sequence[int], prog_seq: Sequence[int]) -> list[T]:
+    array_double_rate = list[T]()
 
-    for a in range(len(rff)):
-        if prog_seq[a] == 0:
-            if rff[a]:
-                array_double_rate += [old_array[a], old_array[a], old_array[a]]
-            else:
-                array_double_rate += [old_array[a], old_array[a]]
-        else:
-            if rff[a]:
-                if tff[a]:
-                    array_double_rate += [old_array[a], old_array[a],
-                                          old_array[a], old_array[a], old_array[a], old_array[a]]
-                else:
-                    array_double_rate += [old_array[a], old_array[a], old_array[a], old_array[a]]
-            else:
-                array_double_rate += [old_array[a], old_array[a]]
+    for prog, arr, rffv, tffv in zip(prog_seq, old_array, rff, tff):
+        repeat_amount = (3 if rffv else 2) if prog == 0 else ((6 if tffv else 4) if rffv else 2)
+
+        array_double_rate.extend([arr] * repeat_amount)
 
     assert (len(array_double_rate) % 2) == 0
 
-    array_return = []
-    for i in range(len(array_double_rate) // 2):
-        f1 = array_double_rate[i * 2 + 0]
-        f2 = array_double_rate[i * 2 + 1]
+    for f1, f2 in zip(array_double_rate[::2], array_double_rate[1::2]):
         if f1 != f2:
-            print("Warning ambigious pattern due to rff {} {}".format(f1, f2))
-            print("This probably just means telecine across chapter boundary")
-        array_return += [f1]
+            warnings.warn(
+                f'Ambiguous pattern due to rff {f1}!={f2}\n'
+                'This probably just means telecine happened across chapters boundary.'
+            )
 
-    return array_return
+    return array_double_rate[::2]
 
 
 def apply_rff_video(
@@ -53,9 +39,9 @@ def apply_rff_video(
     assert len(node) == len(rff) == len(tff) == len(prog) == len(prog_seq)
 
     fields = []
-    tfffs = core.std.SeparateFields(core.std.RemoveFrameProps(node, props=["_FieldBased", "_Field"]), tff=True)
+    tfffs = node.std.RemoveFrameProps(['_FieldBased', '_Field']).std.SeparateFields(True)
 
-    for i, (current_prg_seq, current_prg, current_rff, current_tff) in enumerate(zip(prog_seq, prog, rff, tff)):
+    for i, current_prg_seq, current_prg, current_rff, current_tff in zip(count(), prog_seq, prog, rff, tff):
         if not current_prg_seq:
             if current_tff:
                 first_field = 2 * i
@@ -64,8 +50,11 @@ def apply_rff_video(
                 first_field = 2 * i + 1
                 second_field = 2 * i
 
-            fields += [{"n": first_field, "tf": current_tff, "prg": False},
-                       {"n": second_field, "tf": not current_tff, "prg": False}]
+            fields += [
+                {"n": first_field, "tf": current_tff, "prg": False},
+                {"n": second_field, "tf": not current_tff, "prg": False}
+            ]
+
             if current_rff:
                 assert current_prg
                 fields += [deepcopy(fields[-2])]
@@ -83,69 +72,46 @@ def apply_rff_video(
     assert (len(fields) % 2) == 0
 
     for a, (tf, bf) in enumerate(zip(fields[::2], fields[1::2])):
-        if tf["tf"] == bf["tf"]:
-            bf["tf"] = not bf["tf"]
-            print(f"Invalid field transition @{a}")
+        if tf['tf'] == bf['tf']:
+            bf['tf'] = not bf['tf']
 
-    for a in range(len(fields) // 2):
-        if fields[a * 2]["tf"] == fields[a * 2 + 1]["tf"]:
-            print("Could not fix sth for some reason", a)
-            assert False
+            warnings.warn(f'Invalid field transition @{a}')
 
-    final = clip_remap_frames(tfffs, [x["n"] for x in fields])
+    for fcurr, fnext in zip(fields[::2], fields[1::2]):
+        if fcurr['tf'] == fnext['tf']:
+            raise CustomRuntimeError(
+                f'Found invalid stream with two consecutive {"top" if fcurr["tf"] else "bottom"} fields!'
+            )
 
-    def set_field(n, f, fields):
-        fout = f.copy()
-        fld = fields[n]
-        if "_FieldBased" in fout.props:
-            del fout["_FieldBased"]
+    final = remap_frames(tfffs, [x['n'] for x in fields])
 
-        fout.props['_Field'] = fld["tf"]
+    def _set_field(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
+        fout, fld = f.copy(), fields[n]
+
+        if '_FieldBased' in fout.props:
+            del fout.props['_FieldBased']
+
+        fout.props['_Field'] = fld['tf']
+
         return fout
 
-    final = vs.core.std.ModifyFrame(clip=final, clips=final, selector=partial(set_field, fields=fields))
+    final = final.std.ModifyFrame(final, _set_field)
 
-    woven = core.std.DoubleWeave(final)
-    woven = core.std.SelectEvery(woven, 2, 0)
+    woven = final.std.DoubleWeave()[::2]
 
-    def update_progressive(n, f, fields):
+    def _update_progressive(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
         fout = f.copy()
+
         tf = fields[n * 2]
         bf = fields[n * 2 + 1]
-        if tf["prg"] and bf["prg"]:
+
+        if tf['prg'] and bf['prg']:
             fout.props['_FieldBased'] = 0
+
         return fout
 
-    woven = vs.core.std.ModifyFrame(clip=woven, clips=woven, selector=partial(update_progressive, fields=fields))
-
-    return woven
+    return woven.std.ModifyFrame(woven, _update_progressive)
 
 
-def cut_array_on_ranges(array: list[Any], ranges: list[FrameRange]) -> list[Any]:
-    remap_frames = tuple[int, ...]([
-        x for y in [
-            range(rrange[0], rrange[1] + 1) for rrange in ranges
-        ] for x in y
-    ])
-    newarray = []
-    for i in remap_frames:
-        newarray += [array[i]]
-    return newarray
-
-
-def cut_node_on_ranges(node: vs.VideoNode, ranges: list[FrameRange]) -> vs.VideoNode:
-    remap_frames = tuple[int, ...]([
-        x for y in [
-            range(rrange[0], rrange[1] + 1) for rrange in ranges
-        ] for x in y
-    ])
-    return clip_remap_frames(node, remap_frames)
-
-
-def clip_remap_frames(node: vs.VideoNode, remap_frames) -> vs.VideoNode:  # remap_frames: list[int]
-    blank = node.std.BlankClip(length=len(remap_frames))
-
-    def noname(n, target_node, targetremap_frames):
-        return target_node[targetremap_frames[n]]
-
-    return blank.std.FrameEval(partial(noname, target_node=node, targetremap_frames=remap_frames), clip_src=[node])
+def cut_array_on_ranges(array: list[T], ranges: list[tuple[int, int]]) -> list[T]:
+    return [array[i] for i in flatten([range(rrange[0], rrange[1] + 1) for rrange in ranges])]  # type: ignore
