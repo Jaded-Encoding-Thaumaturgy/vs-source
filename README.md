@@ -88,14 +88,14 @@ title1.audio(0).set_output(1)
 title1.dump_ac3('full_title.ac3', 0)
 
 # -1 is replace with end i.e 15
-ep1, ep2, ep3 = title1.split([6, 11])
+ep1, ep2, ep3 = title1.split_at([6, 11])
 ep1, ep2, ep3 = title1.split_ranges([(1, 5), (6, 10), (11, 15)])
 ep1           = title1.split_range(1, 5)
 ep2           = title1.split_range(6, 10)
 ep3           = title1.split_range(11, -1)
 
 # preview your splits
-title1.preview(title1.split([6,11]))
+title1.preview(title1.split_at([6,11]))
 
 ep1 = title1.split_range(1,5,audio=0)
 
@@ -114,7 +114,7 @@ a = ep1.ac3('/tmp/ep1.ac3',0)
 # Remove junk from the end
 title1 = iso.get_title(1)
 title1.chapters[-1] -= 609
-title1.preview(title1.split([7, 12]))
+title1.preview(title1.split_at([7, 12]))
 
 
 #--------
@@ -126,7 +126,7 @@ splits = []
 for a in range(2,6):
     t = iso.get_title(a)
     t.chapters[0] += 180
-    splits += [t.split([])]
+    splits += [t.split_at([])]
     t.preview(splits[-1])
 
 print(splits[0].ac3('/tmp/ep1.ac3'))
@@ -136,20 +136,20 @@ print(splits[0].ac3('/tmp/ep1.ac3'))
 
 # multi angle + multi audio + rff mode
 # japanese
-a = iso.get_title(4, angle_nr=1, rff_mode=2).split([5, 10, 15],audio=1)
+a = iso.get_title(4, angle_nr=1, rff_mode=2).split_at([5, 10, 15],audio=1)
 
 # EP 1 japanese
 a[0].video.set_output(0)
 a[0].audio.set_output(1)
 
 # italian
-b = iso.get_title(4, angle_nr=2, rff_mode=2).split([5, 10, 15],audio=0)
+b = iso.get_title(4, angle_nr=2, rff_mode=2).split_at([5, 10, 15],audio=0)
 
 # ep 2 italian
 b[1].video.set_output(0)
 b[1].audio().set_output(1)
 ```
 
-The `Title.split` method should behave just like mkvmerge chapter splits (split before the chapter, first chapter is 1), so if you want the (first chapter, all other chapters after).
+The `Title.split_at` method should behave just like mkvmerge chapter splits (split before the chapter, first chapter is 1), so if you want the (first chapter, all other chapters after).
 
 Output chapters always start with frame zero and end at last frame.

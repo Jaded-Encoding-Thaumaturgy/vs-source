@@ -118,7 +118,7 @@ class Title:
     _audios: list[str]
     _patched_end_chapter: int | None
 
-    def split(self, splits: list[int], audio: list[int] | int | None = None) -> tuple[SplitTitle, ...] | SplitTitle:
+    def split_at(self, splits: list[int], audio: list[int] | int | None = None) -> tuple[SplitTitle, ...] | SplitTitle:
         output_cnt = SplitHelper._sanitize_splits(self, splits)
         video = SplitHelper.split_video(self, splits)
         chapters = SplitHelper.split_chapters(self, splits)
@@ -180,14 +180,14 @@ class Title:
             t = len(self.chapters) - 1
 
         if f == 1 and t == len(self.chapters) - 1:
-            return self.split([], audio)
+            return self.split_at([], audio)
 
         if f == 1:
-            return self.split([t + 1], audio)[0]
+            return self.split_at([t + 1], audio)[0]
 
         if t == len(self.chapters) - 1:
-            return self.split([f], audio)[1]
-        return self.split([f, t + 1], audio)[1]
+            return self.split_at([f], audio)[1]
+        return self.split_at([f, t + 1], audio)[1]
 
     def preview(self, splt=None):
         set_output(self.video(), f"title v {self._title}")

@@ -148,4 +148,4 @@ def clip_remap_frames(node: vs.VideoNode, remap_frames) -> vs.VideoNode:  # rema
     def noname(n, target_node, targetremap_frames):
         return target_node[targetremap_frames[n]]
 
-    return blank.std.FrameEval(partial(noname, target_node=node, targetremap_frames=remap_frames))
+    return blank.std.FrameEval(partial(noname, target_node=node, targetremap_frames=remap_frames), clip_src=[node])
