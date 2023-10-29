@@ -157,7 +157,7 @@ class ExternalIndexer(Indexer):
 
         proc = subprocess.Popen(
             list(map(str, self.get_cmd(files, output) + list(cmd_args) + list(self._default_args))),
-            text=True, encoding='utf-8', shell=True if os_name == "nt" else False, cwd=output.get_folder().to_str()
+            text=True, encoding='utf-8', shell=os_name == "nt", cwd=output.get_folder().to_str()
         )
 
         status = proc.wait()

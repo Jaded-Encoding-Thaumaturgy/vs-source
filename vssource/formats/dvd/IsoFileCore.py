@@ -1,56 +1,57 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from abc import abstractmethod
-from fractions import Fraction
-from typing import Sequence
-from vstools import CustomValueError, SPath, vs, set_output, remap_frames
-from functools import partial
 
+import datetime
 import io
+from itertools import count
 import json
 import os
-import datetime
+import subprocess
+from abc import abstractmethod
+from dataclasses import dataclass
+from fractions import Fraction
+from functools import partial
+from typing import Any, Sequence, SupportsFloat
+
+from vstools import CustomValueError, SPath, remap_frames, set_output, vs, copy_signature
 
 from ...indexers import D2VWitch, DGIndex, ExternalIndexer
 from ...rff import apply_rff_array, apply_rff_video, cut_array_on_ranges
 from .parsedvd.ifo import IFO0, IFOX
-
-DVD_DEBUG = "DVD_DEBUG" in os.environ
-
-
-def debug_print(*args, **kwargs):
-    if DVD_DEBUG:
-        print(*args, **kwargs)
 
 
 __all__ = [
     'IsoFileCore', 'Title'
 ]
 
+DVD_DEBUG = "DVD_DEBUG" in os.environ
+
+
+@copy_signature(print)
+def debug_print(*args: Any, **kwargs: Any) -> None:
+    if DVD_DEBUG:
+        print(*args, **kwargs)
+
 
 # d2vwitch needs this patch applied
 # https://gist.github.com/jsaowji/ead18b4f1b90381d558eddaf0336164b
-
 # https://gist.github.com/jsaowji/2bbf9c776a3226d1272e93bb245f7538
-def double_check_dvdnav(iso: str, title: int):
+def double_check_dvdnav(iso: str, title: int) -> list[float] | None:
     try:
-        import subprocess
         ap = subprocess.check_output(["dvdsrc_dvdnav_title_ptt_test", iso, str(title)])
-        lns = ap.splitlines()
-        flts = [float(a) for a in lns]
 
-        return flts
+        return list(map(float, ap.splitlines()))
     except FileNotFoundError:
-        return None
+        ...
+
+    return None
 
 
-def absolute_time_from_timecode(timecodes):
-    absolutetime = []
+def absolute_time_from_timecode(timecodes: Sequence[SupportsFloat]) -> list[float]:
+    absolutetime = list[float]([0.0])
+
     for i, a in enumerate(timecodes):
-        if i == 0:
-            absolutetime += [0.0]
-        else:
-            absolutetime += [absolutetime[i - 1] + float(a)]
+        absolutetime.append(absolutetime[i] + float(a))
+
     return absolutetime
 
 
@@ -78,26 +79,38 @@ class SplitTitle:
 
     def __repr__(self) -> str:
         # TODO: use absolutetime from title
-        _absolute_time = absolute_time_from_timecode([1 / float(self.video.fps)] * len(self.video))
+        _absolute_time = absolute_time_from_timecode(
+            [1 / float(self.video.fps)] * len(self.video)
+        )
 
         chapters = self.chapters + [len(self.video) - 1]
-        chapter_legnths = [_absolute_time[chapters[i + 1]] - _absolute_time[chapters[i]]
-                           for i in range(len(self.chapters))]
 
-        chapter_legnths = [str(datetime.timedelta(seconds=x)) for x in chapter_legnths]
-        timestrings = [str(datetime.timedelta(seconds=_absolute_time[x])) for x in self.chapters]
+        chapter_lengths = [
+            _absolute_time[chapters[i + 1]] - _absolute_time[chapters[i]]
+            for i in range(len(self.chapters))
+        ]
 
-        to_print = "Chapters:\n"
-        for i in range(len(self.chapters)):
-            to_print += "{:02} {:015} {:015} {}".format(i + 1, timestrings[i], chapter_legnths[i], self.chapters[i])
-            to_print += "\n"
+        chapter_lengths_str = [
+            str(datetime.timedelta(seconds=x)) for x in chapter_lengths
+        ]
 
-        to_print += "Audios: (fz)\n"
+        timestrings = [
+            str(datetime.timedelta(seconds=_absolute_time[x])) for x in self.chapters
+        ]
+
+        to_print = ["Chapters:"]
+
+        to_print.extend([
+            f'{i:02} {tms:015} {cptls:015} {cpt}'
+            for i, tms, cptls, cpt in zip(count(1), timestrings, chapter_lengths_str, self.chapters)
+        ])
+
+        to_print.append("Audios: (fz)")
+
         if self.audio is not None:
-            for i, a in enumerate(self.audio):
-                to_print += "{} {}\n".format(i, a)
+            to_print.extend([f'{i} {a}' for i, a in enumerate(self.audio)])
 
-        return to_print.strip()
+        return '\n'.join(to_print)
 
 
 @dataclass
@@ -261,15 +274,15 @@ class Title:
 
     def __repr__(self) -> str:
         chapters = self.chapters + [len(self.node) - 1]
-        chapter_legnths = [self._absolute_time[chapters[i + 1]] - self._absolute_time[chapters[i]]
+        chapter_lengths = [self._absolute_time[chapters[i + 1]] - self._absolute_time[chapters[i]]
                            for i in range(len(self.chapters))]
 
-        chapter_legnths = [str(datetime.timedelta(seconds=x)) for x in chapter_legnths]
+        chapter_lengths = [str(datetime.timedelta(seconds=x)) for x in chapter_lengths]
         timestrings = [str(datetime.timedelta(seconds=self._absolute_time[x])) for x in self.chapters]
 
         to_print = "Chapters:\n"
         for i in range(len(timestrings)):
-            to_print += "{:02} {:015} {:015} {}".format(i + 1, timestrings[i], chapter_legnths[i], self.chapters[i])
+            to_print += "{:02} {:015} {:015} {}".format(i + 1, timestrings[i], chapter_lengths[i], self.chapters[i])
 
             if i == 0:
                 to_print += " (faked)"
@@ -730,11 +743,13 @@ class IsoFileCore:
                 durationcodes = timecodes
                 absolutetime = absolute_time_from_timecode(timecodes)
 
-                def apply_timecode(n, f, timecodes, absolutetime):
+                def apply_timecode(n: int, f: vs.VideoFrame, timecodes, absolutetime) -> vs.VideoFrame:
                     fout = f.copy()
+
                     fout.props["_DurationNum"] = timecodes[n].numerator
                     fout.props["_DurationDen"] = timecodes[n].denominator
                     fout.props["_AbsoluteTime"] = absolutetime[n]
+
                     return fout
                 rnode = vs.core.std.ModifyFrame(rnode, [rnode], partial(apply_timecode,
                                                                         timecodes=timecodes,
