@@ -1,25 +1,27 @@
 # vs-source
 
 ### DVDs were an error.
+
 <br>
 
 A wrapper for DVD file structure and ISO files.
 
-You can find me in the [IEW Discord server](https://discord.gg/qxTxVJGtst), @Setsugennoao#6969.
-<br><br>
+For support you can check out the [JET Discord server](https://discord.gg/XTpc6Fa9eB). <br><br> <br><br>
+
 ## How to install
 
 Install `vssource` with the following command:
 
 ```sh
-$ pip install vssource
+pip install vssource
 ```
 
 Or if you want the latest git version, install it with this command:
 
 ```sh
-$ pip install git+https://github.com/Irrational-Encoding-Wizardry/vs-source.git
+pip install git+https://github.com/Jaded-Encoding-Thaumaturgy/vs-source.git
 ```
+
 <br>
 
 ## Usage
