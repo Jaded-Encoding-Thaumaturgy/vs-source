@@ -1,6 +1,6 @@
 """Vapoursynth Wrapper for DVDs stuff"""
 
-__version__ = '0.9.6'
+__version__ = '0.9.7'
 
 __author__ = 'Setsugen no ao <setsugen@setsugen.dev>'
 __maintainer__ = __author__
