@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-from abc import ABC, abstractmethod
 from io import BufferedReader
 from pprint import pformat
 from struct import unpack
@@ -13,25 +12,21 @@ __all__ = [
 ]
 
 
-class SectorReadHelper(ABC):
+class SectorReadHelper:
     _byte_size_lut = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
 
     def __init__(self, ifo: SPathLike | BufferedReader) -> None:
         if not isinstance(ifo, BufferedReader):
-            file = SPath(ifo)
-            ifo = file.open('rb')
+            self.file = SPath(ifo)
+            ifo = self.file.open('rb')
         else:
-            file = None
+            self.file = None
 
         self.ifo = ifo
 
-        try:
-            self._load()
-        except Exception:
-            raise
-        finally:
-            if file is not None and self.ifo and not self.ifo.closed:
-                ifo.close()
+    def __del__(self):
+        if self.file is not None and self.ifo and not self.ifo.closed:
+            self.ifo.close()
 
     def _goto_sector_ptr(self, pos: int) -> None:
         self.ifo.seek(pos, os.SEEK_SET)
@@ -39,10 +34,6 @@ class SectorReadHelper(ABC):
         ptr, = self._unpack_byte(4)
 
         self.ifo.seek(ptr * 2048, os.SEEK_SET)
-
-    @abstractmethod
-    def _load(self) -> None:
-        ...
 
     def _seek_unpack_byte(self, addr: int, *n: int) -> tuple[int, ...]:
         self.ifo.seek(addr, os.SEEK_SET)

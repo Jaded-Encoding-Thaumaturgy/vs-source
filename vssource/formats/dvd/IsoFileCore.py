@@ -11,13 +11,12 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import partial
 from typing import Any, Sequence, SupportsFloat
-
 from vstools import CustomValueError, SPath, remap_frames, set_output, vs, copy_signature
 
 from ...indexers import D2VWitch, DGIndex, ExternalIndexer
 from ...rff import apply_rff_array, apply_rff_video, cut_array_on_ranges
-from .parsedvd.ifo import IFO0, IFOX
-
+from .parsedvd.ifo import IFO0, IFOX, SectorReadHelper, to_json
+from .parsedvd.vtsi_mat import AUDIO_FORMAT_LPCM, AUDIO_FORMAT_AC3
 
 __all__ = [
     'IsoFileCore', 'Title'
@@ -34,6 +33,7 @@ def debug_print(*args: Any, **kwargs: Any) -> None:
 
 # d2vwitch needs this patch applied
 # https://gist.github.com/jsaowji/ead18b4f1b90381d558eddaf0336164b
+
 # https://gist.github.com/jsaowji/2bbf9c776a3226d1272e93bb245f7538
 def double_check_dvdnav(iso: str, title: int) -> list[float] | None:
     try:
@@ -309,8 +309,8 @@ class SplitHelper:
         prps = nd.get_frame(0).props
 
         strt = prps["Stuff_Start_PTS"]
-#       endd = prps["Stuff_End_PTS"]
-#       debug_print(f"Stuff_Start_PTS pts {strt} Stuff_End_PTS {endd}")
+        endd = prps["Stuff_End_PTS"]
+        debug_print(f"Stuff_Start_PTS pts {strt} Stuff_End_PTS {endd}")
         raw_start = (title._absolute_time[title.chapters[f - 1]] * 90_000)
         raw_end = ((title._absolute_time[title.chapters[t]] + title._duration_times[title.chapters[t]]) * 90_000)
 
@@ -320,7 +320,7 @@ class SplitHelper:
         audio_offset_pts = 0
 
         outf = open(outfile, "wb")
-#       debug_print(f"start_pts  {start_pts} end_pts {end_pts}")
+        debug_print(f"start_pts  {start_pts} end_pts {end_pts}")
 
         i = start_pts // 2880
 
@@ -422,6 +422,8 @@ class SplitHelper:
 
 class IsoFileCore:
     _subfolder = "VIDEO_TS"
+    ifo0: IFO0
+    vts: list[IFOX]
 
     def __init__(
         self, path: SPath | str,
@@ -469,60 +471,58 @@ class IsoFileCore:
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
             raise CustomValueError('"path" needs to point to a .ISO or a dir root of DVD', path, self.__class__)
 
-        # gather json structure
-        if self.use_dvdsrc == 1:
-            self.json = json.loads(vs.core.dvdsrc.Json(self.iso_path))
-        else:
-            self.json = {"ifos": []}
+        fallback_ifostuff = False
 
-            fallback_ifostuff = False
-
-            if self.has_dvdsrc2:
-                i0bytes = vs.core.dvdsrc2.Ifo(self.iso_path, 0)
-                if len(i0bytes) <= 15:
-                    fallback_ifostuff = True
-                    print('newer Vapoursynth is required for dvdsrc2 information gathering without mounting')
-                else:
-                    ifo0 = IFO0(io.BufferedReader(io.BytesIO(i0bytes)))
-                    self.json["ifos"] += [ifo0.crnt]
-                    for i in range(1, ifo0.num_vts + 1):
-                        rdr = io.BufferedReader(io.BytesIO(vs.core.dvdsrc2.Ifo(self.iso_path, i)))
-                        self.json["ifos"] += [IFOX(rdr).crnt]
-
-            if not self.has_dvdsrc2 or fallback_ifostuff:
-                for i, a in enumerate(self.ifo_files):
-                    if i == 0:
-                        self.json["ifos"] += [IFO0(a).crnt]
-                    else:
-                        self.json["ifos"] += [IFOX(a).crnt]
-
-            if not self.has_dvdsrc1:
-                debug_print("Does not have dvdsrc cant double check json with libdvdread")
+        if self.has_dvdsrc2:
+            i0bytes = vs.core.dvdsrc2.Ifo(self.iso_path, 0)
+            if len(i0bytes) <= 30:
+                fallback_ifostuff = True
+                print('newer Vapoursynth is required for dvdsrc2 information gathering without mounting')
             else:
-                dvdsrc_json = json.loads(vs.core.dvdsrc.Json(self.iso_path))
-                try:
-                    del dvdsrc_json["dvdpath"]
-                    del dvdsrc_json["current_vts"]
-                    del dvdsrc_json["current_domain"]
+                self.ifo0 = IFO0(SectorReadHelper(io.BufferedReader(io.BytesIO(i0bytes))))
+                self.vts = []
 
-                    for ifo in dvdsrc_json["ifos"]:
-                        del ifo["pgci_ut"]
-                        ifo["pgci_ut"] = []
-                except KeyError:
-                    pass
+                for i in range(1, self.ifo0.num_vts + 1):
+                    rh = SectorReadHelper(io.BufferedReader(io.BytesIO(vs.core.dvdsrc2.Ifo(self.iso_path, i))))
+                    self.vts += [IFOX(rh)]
 
-                ja = json.dumps(dvdsrc_json, sort_keys=True)
-                jb = json.dumps(self.json, sort_keys=True)
+        if not self.has_dvdsrc2 or fallback_ifostuff:
+            for i, a in enumerate(self.ifo_files):
+                if i == 0:
+                    self.ifo0 = IFO0(a)
+                    self.vts = []
+                else:
+                    self.vts += [IFOX(a)]
 
-                if ja != jb:
-                    print(f"libdvdread json does not match python json a,b have been written to {self.output_folder}")
-                    open(os.path.join(self.output_folder, "a.json"), "wt").write(ja)
-                    open(os.path.join(self.output_folder, "b.json"), "wt").write(jb)
+        self.json = to_json(self.ifo0, self.vts)
+
+        if not self.has_dvdsrc1:
+            debug_print("Does not have dvdsrc cant double check json with libdvdread")
+        else:
+            dvdsrc_json = json.loads(vs.core.dvdsrc.Json(self.iso_path))
+            try:
+                del dvdsrc_json["dvdpath"]
+                del dvdsrc_json["current_vts"]
+                del dvdsrc_json["current_domain"]
+
+                for ifo in dvdsrc_json["ifos"]:
+                    del ifo["pgci_ut"]
+                    ifo["pgci_ut"] = []
+            except KeyError:
+                pass
+
+            ja = json.dumps(dvdsrc_json, sort_keys=True)
+            jb = json.dumps(self.json, sort_keys=True)
+
+            if ja != jb:
+                print(f"libdvdread json does not match python json a,b have been written to {self.output_folder}")
+                open(os.path.join(self.output_folder, "a.json"), "wt").write(ja)
+                open(os.path.join(self.output_folder, "b.json"), "wt").write(jb)
 
         if self.use_dvdsrc == 0:
             self.indexer = indexer if isinstance(indexer, ExternalIndexer) else indexer()
 
-        self.title_count = len(self.json["ifos"][0]["tt_srpt"])
+        self.title_count = len(self.ifo0.tt_srpt)
 
     def get_vts(
         self,
@@ -573,31 +573,28 @@ class IsoFileCore:
         """
         disable_rff = rff_mode >= 1
 
-        tt_srpt = self.json["ifos"][0]["tt_srpt"]
+        tt_srpt = self.ifo0.tt_srpt
         title_idx = title_nr - 1
         if title_idx < 0 or title_idx >= len(tt_srpt):
             raise CustomValueError('"title_nr" out of range', self.__class__)
         tt = tt_srpt[title_idx]
 
-        if tt["nr_of_angles"] != 1 and angle_nr is None:
+        if tt.nr_of_angles != 1 and angle_nr is None:
             raise CustomValueError('no angle_nr given for multi angle title', self.__class__)
 
-        title_set_nr = tt["title_set_nr"]
-        vts_ttn = tt["vts_ttn"]
+        target_vts = self.vts[tt.title_set_nr - 1]
+        target_title = target_vts.vts_ptt_srpt[tt.vts_ttn - 1]
 
-        target_vts = self.json["ifos"][title_set_nr]
-        target_title = target_vts["vts_ptt_srpt"][vts_ttn - 1]
-
-        assert len(target_title) == tt["nr_of_ptts"]
+        assert len(target_title) == tt.nr_of_ptts
 
         for ptt in target_title[1:]:
-            if ptt["pgcn"] != target_title[0]["pgcn"]:
+            if ptt.pgcn != target_title[0].pgcn:
                 raise CustomValueError('title is not one program chain (unsupported currently)', self.__class__)
 
-        pgc_i = target_title[0]["pgcn"] - 1
-        title_programs = [a["pgn"] for a in target_title]
-        targte_pgc = target_vts["vts_pgcit"][pgc_i]
-        pgc_programs = targte_pgc["program_map"]
+        pgc_i = target_title[0].pgcn - 1
+        title_programs = [a.pgn for a in target_title]
+        targte_pgc = target_vts.vts_pgci.pgcs[pgc_i]
+        pgc_programs = targte_pgc.program_map
 
         if title_programs[0] != 1 or pgc_programs[0] != 1:
             print("WARNING Open PR Title does not start at the first cell")
@@ -612,11 +609,11 @@ class IsoFileCore:
         angle_start_cell_i: int = None
 
         is_chapter = []
-        for cell_i in range(len(targte_pgc["cell_position"])):
-            cell_position = targte_pgc["cell_position"][cell_i]
-            cell_playback = targte_pgc["cell_playback"][cell_i]
+        for cell_i in range(len(targte_pgc.cell_position)):
+            cell_position = targte_pgc.cell_position[cell_i]
+            cell_playback = targte_pgc.cell_playback[cell_i]
 
-            block_mode = cell_playback["block_mode"]
+            block_mode = cell_playback.block_mode
 
             if block_mode == 1:  # BLOCK_MODE_FIRST_CELL
                 current_angle = 1
@@ -631,7 +628,7 @@ class IsoFileCore:
                 take_cell = current_angle == angle_nr
 
             if take_cell:
-                vobidcellids_to_take += [(cell_position["vob_id_nr"], cell_position["cell_nr"])]
+                vobidcellids_to_take += [(cell_position.vob_id_nr, cell_position.cell_nr)]
                 is_chapter += [(angle_start_cell_i + 1) in target_programs]
 
         assert len(is_chapter) == len(vobidcellids_to_take)
@@ -647,7 +644,7 @@ class IsoFileCore:
                 raise CustomValueError('For dvdsrc only features pydvdsrc python file needs to be installed', __file__)
 
             sectors = pydvdsrc.get_sectors_from_vobids(target_vts, vobidcellids_to_take)
-            rawnode = vs.core.dvdsrc.FullM2V(self.iso_path, vts=title_set_nr, domain=1, sectors=sectors)
+            rawnode = vs.core.dvdsrc.FullM2V(self.iso_path, vts=tt.title_set_nr, domain=1, sectors=sectors)
             exa = pydvdsrc.DVDSRCM2vInfoExtracter(rawnode)
             rff = exa.rff
 
@@ -658,7 +655,7 @@ class IsoFileCore:
                 rnode = rawnode
                 vobids = exa.vobid
         elif self.use_dvdsrc == 2:
-            admap = target_vts["vts_vobu_admap"]
+            admap = target_vts.vts_vobu_admap
 
             all_ranges = []
 
@@ -673,7 +670,7 @@ class IsoFileCore:
                     end_index = len(admap) - 1
                 idxx += [start_index, end_index]
 
-            rawnode = vs.core.dvdsrc2.FullVts(self.iso_path, vts=title_set_nr, ranges=idxx)
+            rawnode = vs.core.dvdsrc2.FullVts(self.iso_path, vts=tt.title_set_nr, ranges=idxx)
             staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
 
             if not disable_rff:
@@ -686,8 +683,8 @@ class IsoFileCore:
             rff = staff.rff
         else:
             dvdsrc_ranges = []
-            vob_input_files = self._get_title_vob_files_for_vts(title_set_nr)
-            dvddd = self._d2v_vobid_frameset(title_set_nr)
+            vob_input_files = self._get_title_vob_files_for_vts(tt.title_set_nr)
+            dvddd = self._d2v_vobid_frameset(tt.title_set_nr)
 
             if len(dvddd.keys()) == 1 and (0, 0) in dvddd.keys():
                 raise CustomValueError(
@@ -698,7 +695,7 @@ class IsoFileCore:
             for a in vobidcellids_to_take:
                 frameranges += dvddd[a]
 
-            fflags, vobids, progseq = self._d2v_collect_all_frameflags(title_set_nr)
+            fflags, vobids, progseq = self._d2v_collect_all_frameflags(tt.title_set_nr)
 
             index_file = self.indexer.index(vob_input_files, output_folder=self.output_folder)[0]
             node = self.indexer._source_func(index_file, rff=False)
@@ -745,11 +742,9 @@ class IsoFileCore:
 
                 def apply_timecode(n: int, f: vs.VideoFrame, timecodes, absolutetime) -> vs.VideoFrame:
                     fout = f.copy()
-
                     fout.props["_DurationNum"] = timecodes[n].numerator
                     fout.props["_DurationDen"] = timecodes[n].denominator
                     fout.props["_AbsoluteTime"] = absolutetime[n]
-
                     return fout
                 rnode = vs.core.std.ModifyFrame(rnode, [rnode], partial(apply_timecode,
                                                                         timecodes=timecodes,
@@ -844,23 +839,23 @@ class IsoFileCore:
             output_chapters[-1] = lastframe
 
         audios = []
-        for i, a in enumerate(targte_pgc["audio_control"]):
-            if a["available"]:
-                audo = target_vts["vtsi_mat"]["vts_audio_attr"][i]
+        for i, a in enumerate(targte_pgc.audio_control):
+            if a.available:
+                audo = target_vts.vtsi_mat.vts_audio_attr[i]
 
-                if audo["audio_format"] == 0:
+                if audo.audio_format == AUDIO_FORMAT_AC3:
                     aformat = "ac3"
-                elif audo["audio_format"] == 4:
+                elif audo.audio_format == AUDIO_FORMAT_LPCM:
                     aformat = "lpcm"
                 else:
                     aformat = "unk"
 
-                audios += [f'{aformat}({audo["language"]})']
+                audios += [f'{aformat}({audo.language})']
             else:
                 audios += ["none"]
 
         return Title(
-            rnode, output_chapters, changes, self, title_nr, title_set_nr,
+            rnode, output_chapters, changes, self, title_nr, tt.title_set_nr,
             vobidcellids_to_take, dvdsrc_ranges, absolutetime, durationcodes,
             audios, patched_end_chapter
         )
@@ -1008,9 +1003,9 @@ def get_sectors_from_vobids(target_vts: dict, vobidcellids_to_take: list[tuple[i
     return sectors
 
 
-def get_sectorranges_for_vobcellpair(current_vts: dict, pair_id: tuple[int, int]) -> list[tuple[int, int]]:
+def get_sectorranges_for_vobcellpair(current_vts: IFOX, pair_id: tuple[int, int]) -> list[tuple[int, int]]:
     ranges = []
-    for e in current_vts["vts_c_adt"]:
-        if e["vob_id"] == pair_id[0] and e["cell_id"] == pair_id[1]:
-            ranges += [(e["start_sector"], e["last_sector"])]
+    for e in current_vts.vts_c_adt.cell_adr_table:
+        if e.vob_id == pair_id[0] and e.cell_id == pair_id[1]:
+            ranges += [(e.start_sector, e.last_sector)]
     return ranges
