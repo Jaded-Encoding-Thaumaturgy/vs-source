@@ -5,6 +5,7 @@ import io
 from itertools import count
 import json
 import os
+import warnings
 import subprocess
 from abc import abstractmethod
 from dataclasses import dataclass
@@ -515,7 +516,8 @@ class IsoFileCore:
             jb = json.dumps(self.json, sort_keys=True)
 
             if ja != jb:
-                print(f"libdvdread json does not match python json a,b have been written to {self.output_folder}")
+                warnings.warn(f"libdvdread json does not match python implentation\n"
+                              f"json a,b have been written to {self.output_folder}")
                 open(os.path.join(self.output_folder, "a.json"), "wt").write(ja)
                 open(os.path.join(self.output_folder, "b.json"), "wt").write(jb)
 
@@ -597,12 +599,12 @@ class IsoFileCore:
         pgc_programs = targte_pgc.program_map
 
         if title_programs[0] != 1 or pgc_programs[0] != 1:
-            print("WARNING Open PR Title does not start at the first cell")
+            warnings.warn('WARNING Open Title does not start at the first cell (open issue in github with sample)\n')
 
         target_programs = [a[1] for a in list(filter(lambda x: (x[0] + 1) in title_programs, enumerate(pgc_programs)))]
 
         if target_programs != pgc_programs:
-            print("WARNING Open PR The program chain does not include all ptt's")
+            warnings.warn('WARNING Open the program chain does not include all ptts\n')
 
         vobidcellids_to_take = []
         current_angle = 1
@@ -809,7 +811,8 @@ class IsoFileCore:
 
             adjusted = [absolutetime[i] for i in output_chapters]  # [1:len(output_chapters)-1] ]
             if len(adjusted) != len(dvnavchapters):
-                print("DVDNAVCHAPTER LENGTH DO NOT MATCH OUR chapters", len(adjusted), len(dvnavchapters))
+                warnings.warn(f'dvdnavchapters length do not match our chapters {len(adjusted)} {len(dvnavchapters)}'
+                              ' (open an issue in github)')
                 print(adjusted)
                 print(dvnavchapters)
             else:
@@ -819,7 +822,9 @@ class IsoFileCore:
                     # on hard telecine ntcs it matches up almost perfectly
                     # but on ~24p pal rffd it does not lol
                     if abs(adjusted[i] - dvnavchapters[i]) > framelen * 20:
-                        print("DVDNAV DONT MATCH OUR CHAPTER {} {}".format(adjusted[i], dvnavchapters[i]))
+                        warnings.warn(
+                            f'dvdnavchapters length do not match our chapters {len(adjusted)} {len(dvnavchapters)}'
+                            ' (open an issue in github)')
                         print(adjusted)
                         print(dvnavchapters)
                         break
@@ -934,7 +939,27 @@ class IsoFileCore:
     def __repr__(self) -> str:
         to_print = f"Path: {self.iso_path}\n"
         to_print += f"Mount: {self._mount_path}\n"
-        to_print += f"Titles: {self.title_count}"
+        for i, tt in enumerate(self.ifo0.tt_srpt):
+            target_vts = self.vts[tt.title_set_nr - 1]
+            ptts = target_vts.vts_ptt_srpt[tt.vts_ttn - 1]
+
+            current_time = 0.0
+            timestrings = []
+            absolutestrings = []
+            for a in ptts:
+                target_pgc = target_vts.vts_pgci.pgcs[a.pgcn - 1]
+                cell_n = target_pgc.program_map[a.pgn - 1]
+
+                chap_time = target_pgc.cell_playback[cell_n - 1].playback_time.get_seconds_float()
+                current_time += chap_time
+
+                timestrings += [str(datetime.timedelta(seconds=chap_time))]
+                absolutestrings += [str(datetime.timedelta(seconds=current_time))]
+
+            to_print += f"Title: {i+1:02}\n"
+            to_print += f"length: {timestrings}\n"
+            to_print += f"end   : {absolutestrings}\n"
+            to_print += "\n"
 
         return to_print.strip()
 
@@ -993,14 +1018,6 @@ class IsoFileCore:
     @abstractmethod
     def _mount(self) -> SPath | None:
         raise NotImplementedError()
-
-
-def get_sectors_from_vobids(target_vts: dict, vobidcellids_to_take: list[tuple[int, int]]) -> list[int]:
-    sectors = []
-    for a in vobidcellids_to_take:
-        for srange in get_sectorranges_for_vobcellpair(target_vts, a):
-            sectors += list(range(srange[0], srange[1] + 1))
-    return sectors
 
 
 def get_sectorranges_for_vobcellpair(current_vts: IFOX, pair_id: tuple[int, int]) -> list[tuple[int, int]]:

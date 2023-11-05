@@ -2,15 +2,15 @@ from dataclasses import dataclass
 from .sector import SectorReadHelper
 
 
+AUDIO_FORMAT_AC3 = 0
+AUDIO_FORMAT_LPCM = 4
+
+
 @dataclass
 class VTSVideoAttr:
     mpeg_version: int
     video_format: int
     picture_size: int
-
-
-AUDIO_FORMAT_AC3 = 0
-AUDIO_FORMAT_LPCM = 4
 
 
 @dataclass

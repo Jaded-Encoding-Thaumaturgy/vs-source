@@ -1,36 +1,7 @@
 from dataclasses import dataclass
 from .sector import SectorReadHelper
 import os
-from vstools import Region
-
-
-@dataclass
-class TimeSpan:
-    hours: int
-    minutes: int
-    seconds: int
-
-    # TODO
-    frame_u: int
-    # frames: int
-
-
-VTS_FRAMERATE = {
-    0x01: Region.PAL.framerate,
-    0x03: Region.NTSC.framerate
-}
-
-
-def _get_timespan(hours: int, minutes: int, seconds: int, frames: int) -> dict:
-    if ((frames >> 6) & 0x01) != 1:
-        raise ValueError
-
-    fps = frames >> 6
-
-    if fps not in VTS_FRAMERATE:
-        raise ValueError
-
-    return {"hour": hours, "minute": minutes, "second": seconds, "frame_u": frames}
+from .timespan import TimeSpan
 
 
 @dataclass
@@ -137,7 +108,7 @@ class VTSPgci:
                     seamless_angle=(a[0] & 0b1) != 0,
                     block_mode=((a[0] & 0b11000000) >> 6),
                     block_type=((a[0] & 0b00110000) >> 4),
-                    playback_time=_get_timespan(*a[4:8]),
+                    playback_time=TimeSpan(*a[4:8]),
                     first_sector=a[5 + 3],
                     last_sector=a[8 + 3],
                     first_ilvu_end_sector=a[6 + 3],
