@@ -10,11 +10,11 @@ from abc import abstractmethod
 from dataclasses import dataclass
 from fractions import Fraction
 from itertools import count
-from typing import Any, Callable, Sequence, SupportsFloat, cast
+from typing import TYPE_CHECKING, Any, Callable, Iterator, Sequence, SupportsFloat, SupportsIndex, cast, overload
 
 from vstools import (
     CustomValueError, FuncExceptT, SPath, SPathLike, SupportsString, T, copy_signature, get_prop, remap_frames,
-    set_output, to_arr, vs
+    set_output, to_arr, vs, vs_object
 )
 
 from ...dataclasses import D2VIndexFrameData
@@ -128,6 +128,80 @@ class SplitTitle:
         return '\n'.join(to_print)
 
 
+class TitleAudios(vs_object, list[vs.AudioNode]):
+    def __init__(self, title: Title) -> None:
+        self.title = title
+
+        self.cache = dict[int, vs.AudioNode | None]({i: None for i in range(len(self.title._audios))})
+
+    @overload
+    def __getitem__(self, idx: SupportsIndex, /) -> vs.AudioNode:
+        ...
+
+    @overload
+    def __getitem__(self, slicidx: slice, /) -> list[vs.AudioNode]:
+        ...
+
+    def __getitem__(self, key: SupportsIndex | slice) -> vs.AudioNode | list[vs.AudioNode]:
+        self.title._assert_dvdsrc2(self.__class__)
+
+        if isinstance(key, slice):
+            return [self[i] for i in range(*key.indices(len(self)))]
+
+        i = int(key)
+
+        if i not in self.cache:
+            raise KeyError
+
+        if (_anode := self.cache[i]):
+            return _anode
+
+        asd = self.title._audios[i]
+
+        anode: vs.AudioNode
+        args = (self.title._core.iso_path, self.title._vts, i, self.title._dvdsrc_ranges)
+        if asd.startswith("ac3"):
+            anode = vs.core.dvdsrc2.FullVtsAc3(*args)  # type: ignore
+        elif asd.startswith("lpcm"):
+            anode = vs.core.dvdsrc2.FullVtsLpcm(*args)  # type: ignore
+        else:
+            raise CustomValueError('Invalid index for audio node!', self.__class__)
+
+        strt = (get_prop(anode, 'Stuff_Start_PTS', int) * anode.sample_rate) / 90_000
+        endd = (get_prop(anode, 'Stuff_End_PTS', int) * anode.sample_rate) / 90_000
+
+        debug_print(
+            "splice", round((strt / anode.sample_rate) * 1000 * 10) / 10,
+            "ms", round((endd / anode.sample_rate) * 1000 * 10) / 10, "ms"
+        )
+
+        start, end = int(strt), int(endd)
+
+        self.cache[i] = anode = anode[start:len(anode) - end]
+
+        total_dura = (self.title._absolute_time[-1] + self.title._duration_times[-1])
+        delta = abs(total_dura - anode.num_samples / anode.sample_rate) * 1000
+
+        debug_print(f'delta {delta} ms')
+
+        if delta > 50:
+            debug_print(f'Rather big audio/video lenght delta might be indecator that something is off {delta}!')
+
+        return anode
+
+    def __len__(self) -> int:
+        return len(self.cache)
+
+    def __iter__(self) -> Iterator[vs.AudioNode]:
+        return (self[i] for i in range(len(self)))
+
+    def __vs_del__(self, core_id: int) -> None:
+        self.cache.clear()
+
+    if not TYPE_CHECKING:
+        __delitem__ = __setitem__ = None
+
+
 @dataclass
 class Title:
     video: vs.VideoNode
@@ -145,6 +219,9 @@ class Title:
     _duration_times: list[float]
     _audios: list[str]
     _patched_end_chapter: int | None
+
+    def __post_init__(self) -> None:
+        self.audios = TitleAudios(self)
 
     def split_at(self, splits: list[int], audio: int | list[int] | None = None) -> tuple[SplitTitle, ...]:
         output_cnt = SplitHelper._sanitize_splits(self, splits)
@@ -219,43 +296,6 @@ class Title:
                 if s.audio:
                     for j, audio in enumerate(s.audio):
                         set_output(audio, f'split {i} - {j}')
-
-    def audio(self, i: int = 0) -> vs.AudioNode:
-        self._assert_dvdsrc2(self.audio)
-
-        asd = self._audios[i]
-
-        anode: vs.AudioNode
-        args = (self._core.iso_path, self._vts, i, self._dvdsrc_ranges)
-        if asd.startswith("ac3"):
-            anode = vs.core.dvdsrc2.FullVtsAc3(*args)  # type: ignore
-        elif asd.startswith("lpcm"):
-            anode = vs.core.dvdsrc2.FullVtsLpcm(*args)  # type: ignore
-        else:
-            raise CustomValueError('Invalid index for audio node!', self.audio)
-
-        prps = anode.get_frame(0).props
-
-        strt = (get_prop(prps, 'Stuff_Start_PTS', int) * anode.sample_rate) / 90_000
-        endd = (get_prop(prps, 'Stuff_End_PTS', int) * anode.sample_rate) / 90_000
-
-        debug_print(
-            "splice", round((strt / anode.sample_rate) * 1000 * 10) / 10,
-            "ms", round((endd / anode.sample_rate) * 1000 * 10) / 10, "ms"
-        )
-
-        start, end = int(strt), int(endd)
-        anode = anode[start:len(anode) - end]
-
-        total_dura = (self._absolute_time[-1] + self._duration_times[-1])
-        delta = abs(total_dura - anode.num_samples / anode.sample_rate) * 1000
-
-        debug_print(f"delta {delta} ms")
-
-        if delta > 50:
-            debug_print(f'Rather big audio/video lenght delta might be indecator that something is off {delta}!')
-
-        return anode
 
     def _assert_dvdsrc2(self, func: FuncExceptT) -> None:
         if self._dvdsrc_ranges is None or len(self._dvdsrc_ranges) == 0:
@@ -385,7 +425,7 @@ class SplitHelper:
 
     @staticmethod
     def split_audio(title: Title, splits: list[int], i: int = 0) -> tuple[vs.AudioNode, ...]:
-        reta = SplitHelper._cut_split(title, splits, title.audio(i), SplitHelper._cut_fz_a)
+        reta = SplitHelper._cut_split(title, splits, title.audios[i], SplitHelper._cut_fz_a)
         assert len(reta) == len(splits) + 1
         return reta
 

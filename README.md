@@ -84,7 +84,7 @@ title1 = iso.get_title(1)
 print(title1)
 
 title1.video.set_output(0)
-title1.audio(0).set_output(1)
+title1.audios[0].set_output(1)
 
 title1.dump_ac3('full_title.ac3', 0)
 
@@ -148,7 +148,7 @@ b = iso.get_title(4, angle_nr=2, rff_mode=2).split_at([5, 10, 15],audio=0)
 
 # ep 2 italian
 b[1].video.set_output(0)
-b[1].audio().set_output(1)
+b[1].audios[0].set_output(1)
 ```
 
 The `Title.split_at` method should behave just like mkvmerge chapter splits (split before the chapter, first chapter is 1), so if you want the (first chapter, all other chapters after).
