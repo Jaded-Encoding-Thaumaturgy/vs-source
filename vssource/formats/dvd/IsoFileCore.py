@@ -239,7 +239,7 @@ class Title:
     def assert_dvdsrc2(self):
         if self._dvdsrc_ranges is None or len(self._dvdsrc_ranges) == 0:
             raise CustomValueError("Title needts to be opened with dvdsrc2", __class__)
-        if self._core.use_dvdsrc != 2:
+        if not self._core.use_dvdsrc:
             raise CustomValueError("This feature requires dvdsrc2", __class__)
 
     def dump_ac3(self, a: str, audio_i: int = 0, only_calc_delay: bool = False) -> float:
@@ -424,20 +424,16 @@ class IsoFileCore:
 
     def __init__(
         self, path: SPath | str,
-        use_dvdsrc: None | int = None,
         indexer: ExternalIndexer | type[ExternalIndexer] = None,
     ):
         """
         Only external indexer supported D2VWitch and DGIndex
 
-        indexer only used if use_dvdsrc == 0
+        If the indexer is None dvdsrc is used
 
         """
         self.force_root = False
         self.output_folder = "/tmp" if os.name != "nt" else "C:/tmp"
-
-        if indexer is None:
-            indexer = DGIndex() if os.name == "nt" else D2VWitch()
 
         self._mount_path: SPath | None = None
         self._vob_files: list[SPath] | None = None
@@ -445,35 +441,23 @@ class IsoFileCore:
 
         self.has_dvdsrc1 = hasattr(vs.core, "dvdsrc")
         self.has_dvdsrc2 = hasattr(vs.core, "dvdsrc2")
-        self.use_dvdsrc = use_dvdsrc
+        self.use_dvdsrc = indexer is None
 
-        if self.use_dvdsrc is None:
-            if self.has_dvdsrc2:
-                self.use_dvdsrc = 2
-            elif self.has_dvdsrc1:
-                self.use_dvdsrc = 1
-            else:
-                self.use_dvdsrc = 0
-
-        if isinstance(self.use_dvdsrc, bool):
-            self.use_dvdsrc = 2 if self.use_dvdsrc else 0
-
-        if use_dvdsrc == 1:
-            assert self.has_dvdsrc1
-        if use_dvdsrc == 2:
-            assert self.has_dvdsrc2
+        if self.use_dvdsrc and not self.has_dvdsrc2:
+            indexer = DGIndex() if os.name == "nt" else D2VWitch()
+            self.use_dvdsrc = False
 
         self.iso_path = SPath(path).absolute()
 
         if not self.iso_path.is_dir() and not self.iso_path.is_file():
             raise CustomValueError('"path" needs to point to a .ISO or a dir root of DVD', path, self.__class__)
 
-        fallback_ifostuff = False
+        read_ifo_from_mount = False
 
-        if self.has_dvdsrc2:
+        if self.use_dvdsrc:
             i0bytes = vs.core.dvdsrc2.Ifo(self.iso_path, 0)
             if len(i0bytes) <= 30:
-                fallback_ifostuff = True
+                read_ifo_from_mount = True
                 print('newer Vapoursynth is required for dvdsrc2 information gathering without mounting')
             else:
                 self.ifo0 = IFO0(SectorReadHelper(io.BufferedReader(io.BytesIO(i0bytes))))
@@ -483,13 +467,13 @@ class IsoFileCore:
                     rh = SectorReadHelper(io.BufferedReader(io.BytesIO(vs.core.dvdsrc2.Ifo(self.iso_path, i))))
                     self.vts += [IFOX(rh)]
 
-        if not self.has_dvdsrc2 or fallback_ifostuff:
+        if not self.use_dvdsrc or read_ifo_from_mount:
             for i, a in enumerate(self.ifo_files):
                 if i == 0:
-                    self.ifo0 = IFO0(a)
+                    self.ifo0 = IFO0(SectorReadHelper(a))
                     self.vts = []
                 else:
-                    self.vts += [IFOX(a)]
+                    self.vts += [IFOX(SectorReadHelper(a))]
 
         self.json = to_json(self.ifo0, self.vts)
 
@@ -517,7 +501,7 @@ class IsoFileCore:
                 open(os.path.join(self.output_folder, "a.json"), "wt").write(ja)
                 open(os.path.join(self.output_folder, "b.json"), "wt").write(jb)
 
-        if self.use_dvdsrc == 0:
+        if not self.use_dvdsrc:
             self.indexer = indexer if isinstance(indexer, ExternalIndexer) else indexer()
 
         self.title_count = len(self.ifo0.tt_srpt)
@@ -534,8 +518,7 @@ class IsoFileCore:
         mainly useful for debugging and checking if our rff algorithm is good
 
         """
-        assert self.use_dvdsrc in [0, 2]
-        if self.use_dvdsrc == 0:
+        if self.use_dvdsrc:
             vob_input_files = self._get_title_vob_files_for_vts(title_set_nr)
             index_file = self.indexer.index(vob_input_files, output_folder=self.output_folder)[0]
 
@@ -632,27 +615,7 @@ class IsoFileCore:
         assert len(is_chapter) == len(vobidcellids_to_take)
 
         # should set rnode, vobids and rff, dvdsrc_ranges
-        if self.use_dvdsrc == 1:
-            dvdsrc_ranges = []
-            if not hasattr(vs.core, "dvdsrc"):
-                raise CustomValueError('For dvdsrc only features dvdsrc plugin needs to be installed', __file__)
-            try:
-                import pydvdsrc
-            except ImportError:
-                raise CustomValueError('For dvdsrc only features pydvdsrc python file needs to be installed', __file__)
-
-            sectors = pydvdsrc.get_sectors_from_vobids(target_vts, vobidcellids_to_take)
-            rawnode = vs.core.dvdsrc.FullM2V(self.iso_path, vts=tt.title_set_nr, domain=1, sectors=sectors)
-            exa = pydvdsrc.DVDSRCM2vInfoExtracter(rawnode)
-            rff = exa.rff
-
-            if not disable_rff:
-                rnode = apply_rff_video(rawnode, exa.rff, exa.tff, exa.prog, exa.prog_seq)
-                vobids = apply_rff_array(exa.vobid, exa.rff, exa.tff, exa.prog_seq)
-            else:
-                rnode = rawnode
-                vobids = exa.vobid
-        elif self.use_dvdsrc == 2:
+        if self.use_dvdsrc:
             admap = target_vts.vts_vobu_admap
 
             all_ranges = []
@@ -698,8 +661,9 @@ class IsoFileCore:
             index_file = self.indexer.index(vob_input_files, output_folder=self.output_folder)[0]
             node = self.indexer._source_func(index_file, rff=False)
             # node = self.indexer.source(vob_input_files, output_folder=self.output_folder, rff=False)
-            assert len(node) == len(fflags)
+            assert len(node) == len(fflags) == len(vobids) == len(progseq)
 
+            progseq = cut_array_on_ranges(progseq, frameranges)
             fflags = cut_array_on_ranges(fflags, frameranges)
             vobids = cut_array_on_ranges(vobids, frameranges)
             node = remap_frames(node, frameranges)

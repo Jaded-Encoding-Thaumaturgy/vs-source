@@ -75,12 +75,8 @@ from vstools import set_output
 # Autodetect what to index with
 iso = IsoFile('.\DVD_VIDEOS\Suzumiya_2009_DVD\KABA_6001.ISO')
 
-# Index with dvdsrc2
-iso = IsoFile('.\SOME_DVD_FOLDER\HARUHI', True)
-print(iso)
-
 # Force index with dgindex
-iso = IsoFile('.\SOME_DVD_FOLDER\HARUHI', False, indexer=DGIndex)
+iso = IsoFile('.\SOME_DVD_FOLDER\HARUHI', indexer=DGIndex)
 
 title1 = iso.get_title(1)
 
