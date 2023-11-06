@@ -14,7 +14,7 @@ __all__ = [
 
 
 class BestSource(Indexer):
-    _source_func = core.lazy.bs.VideoSource
+    _source_func = core.lazy.bs.VideoSource  # type: ignore
 
 
 class IMWRI(Indexer):
