@@ -21,7 +21,10 @@ from vstools import (
 from ...dataclasses import D2VIndexFrameData
 from ...indexers import D2VWitch, DGIndex, ExternalIndexer
 from ...rff import apply_rff_array, apply_rff_video, cut_array_on_ranges
-from .parsedvd import AUDIO_FORMAT_AC3, AUDIO_FORMAT_LPCM, IFO0, IFOX, SectorReadHelper, to_json
+from .parsedvd import (
+    AUDIO_FORMAT_AC3, AUDIO_FORMAT_LPCM, IFO0, IFOX, SectorReadHelper, to_json,
+    BLOCK_MODE_FIRST_CELL, BLOCK_MODE_IN_BLOCK, BLOCK_MODE_LAST_CELL
+)
 
 __all__ = [
     'IsoFileCore', 'Title'
@@ -476,26 +479,50 @@ class IsoFileCore:
 
         self.iso_path = SPath(path).absolute()
 
-        if not (self.iso_path.is_dir() and self.iso_path.is_file()):
+        #this check seems stupid
+        if not (self.iso_path.is_dir() or self.iso_path.is_file()):
             raise CustomValueError('"path" needs to point to a .ISO or a dir root of DVD', str(path), self.__class__)
 
-        ifo0: SPathLike | io.BufferedReader | None = None
-        ifos: Sequence[SPathLike | io.BufferedReader] = []
+#        ifo0: SPathLike | io.BufferedReader | None = None
+#        ifos: Sequence[SPathLike | io.BufferedReader] = []
+#        if self.use_dvdsrc:
+#            _ifo0, *_ifos = [
+#                cast(bytes, vs.core.dvdsrc2.Ifo(self.iso_path, i)) for i in range(self.ifo0.num_vts + 1)
+#            ]
+#
+#            if len(_ifo0) <= 30:
+#                warnings.warn('Newer VapourSynth is required for dvdsrc2 information gathering without mounting!')
+#            else:
+#                ifo0, *ifos = [io.BufferedReader(io.BytesIO(x)) for x in (_ifo0, *_ifos)]  # type: ignore
+#
+#        if not ifo0:
+#            ifo0, *ifos = self.ifo_files
+#
+#        self.ifo0 = IFO0(SectorReadHelper(ifo0))
+#        self.vts = [IFOX(SectorReadHelper(ifo)) for ifo in ifos]
+
+        read_ifo_from_mount = False
+
         if self.use_dvdsrc:
-            _ifo0, *_ifos = [
-                cast(bytes, vs.core.dvdsrc2.Ifo(self.iso_path, i)) for i in range(self.ifo0.num_vts + 1)
-            ]
-
-            if len(_ifo0) <= 30:
-                warnings.warn('Newer VapourSynth is required for dvdsrc2 information gathering without mounting!')
+            i0bytes = vs.core.dvdsrc2.Ifo(self.iso_path, 0)
+            if len(i0bytes) <= 30:
+                read_ifo_from_mount = True
+                print('newer Vapoursynth is required for dvdsrc2 information gathering without mounting')
             else:
-                ifo0, *ifos = [io.BufferedReader(io.BytesIO(x)) for x in (_ifo0, *_ifos)]  # type: ignore
+                self.ifo0 = IFO0(SectorReadHelper(io.BufferedReader(io.BytesIO(i0bytes))))
+                self.vts = []
 
-        if not ifo0:
-            ifo0, *ifos = self.ifo_files
+                for i in range(1, self.ifo0.num_vts + 1):
+                    rh = SectorReadHelper(io.BufferedReader(io.BytesIO(vs.core.dvdsrc2.Ifo(self.iso_path, i))))
+                    self.vts += [IFOX(rh)]
 
-        self.ifo0 = IFO0(SectorReadHelper(ifo0))
-        self.vts = [IFOX(SectorReadHelper(ifo)) for ifo in ifos]
+        if not self.use_dvdsrc or read_ifo_from_mount:
+            for i, a in enumerate(self.ifo_files):
+                if i == 0:
+                    self.ifo0 = IFO0(SectorReadHelper(a))
+                    self.vts = []
+                else:
+                    self.vts += [IFOX(SectorReadHelper(a))]
 
         self.json = to_json(self.ifo0, self.vts)
 
@@ -564,6 +591,7 @@ class IsoFileCore:
                                     1 calculate per frame durations based on rff
                                     2 set average fps on global clip
         """
+        # TODO: assert angle_nr range
         disable_rff = rff_mode >= 1
 
         tt_srpt = self.ifo0.tt_srpt
@@ -584,47 +612,60 @@ class IsoFileCore:
 
         for ptt in target_title[1:]:
             if ptt.pgcn != target_title[0].pgcn:
-                raise CustomValueError('title is not one program chain (unsupported currently)', self.get_title)
-
-        pgc_i = target_title[0].pgcn - 1
-        title_programs = [a.pgn for a in target_title]
-        target_pgc = target_vts.vts_pgci.pgcs[pgc_i]
-        pgc_programs = target_pgc.program_map
-
-        if title_programs[0] != 1 or pgc_programs[0] != 1:
-            warnings.warn('Open Title does not start at the first cell (open issue in github with sample)\n')
-
-        target_programs = [a[1] for a in list(filter(lambda x: (x[0] + 1) in title_programs, enumerate(pgc_programs)))]
-
-        if target_programs != pgc_programs:
-            warnings.warn('Open the program chain does not include all ptts\n')
+                warnings.warn('title is not one program chain (untested currently)')
 
         vobidcellids_to_take = list[tuple[int, int]]()
-        current_angle = 1
-        angle_start_cell_i: int
-
         is_chapter = []
-        for cell_i in range(len(target_pgc.cell_position)):
-            cell_position = target_pgc.cell_position[cell_i]
-            cell_playback = target_pgc.cell_playback[cell_i]
 
-            block_mode = cell_playback.block_mode
+        i = 0
+        while i < len(target_title):
+            ptt_to_take_for_pgc = 0
 
-            if block_mode == 1:  # BLOCK_MODE_FIRST_CELL
-                current_angle = 1
-                angle_start_cell_i = cell_i
-            elif block_mode == 2 or block_mode == 3:  # BLOCK_MODE_IN_BLOCK and BLOCK_MODE_LAST_CELL
-                current_angle += 1
+            for j in target_title[i:]:
+                if target_title[i].pgcn != j.pgcn:
+                    break
+                ptt_to_take_for_pgc += 1
+            assert ptt_to_take_for_pgc >= 1
 
-            if block_mode == 0:
-                take_cell = True
-                angle_start_cell_i = cell_i
-            else:
-                take_cell = current_angle == angle_nr
+            title_programs = [a.pgn for a in target_title[i:i + ptt_to_take_for_pgc]]
+            target_pgc = target_vts.vts_pgci.pgcs[target_title[i].pgcn - 1]
+            pgc_programs = target_pgc.program_map
 
-            if take_cell:
-                vobidcellids_to_take += [(cell_position.vob_id_nr, cell_position.cell_nr)]
-                is_chapter += [(angle_start_cell_i + 1) in target_programs]
+            if title_programs[0] != 1 or pgc_programs[0] != 1:
+                warnings.warn('Open Title does not start at the first cell (open issue in github with sample)\n')
+
+            target_programs = [a[1]
+                               for a in list(filter(lambda x: (x[0] + 1) in title_programs, enumerate(pgc_programs)))]
+
+            if target_programs != pgc_programs:
+                warnings.warn('Open the program chain does not include all ptts\n')
+
+            current_angle = 1
+            angle_start_cell_i: int
+
+            for cell_i in range(len(target_pgc.cell_position)):
+                cell_position = target_pgc.cell_position[cell_i]
+                cell_playback = target_pgc.cell_playback[cell_i]
+
+                block_mode = cell_playback.block_mode
+
+                if block_mode == BLOCK_MODE_FIRST_CELL:
+                    current_angle = 1
+                    angle_start_cell_i = cell_i
+                elif block_mode == BLOCK_MODE_IN_BLOCK or block_mode == BLOCK_MODE_LAST_CELL:
+                    current_angle += 1
+
+                if block_mode == 0:
+                    take_cell = True
+                    angle_start_cell_i = cell_i
+                else:
+                    take_cell = current_angle == angle_nr
+
+                if take_cell:
+                    vobidcellids_to_take += [(cell_position.vob_id_nr, cell_position.cell_nr)]
+                    is_chapter += [(angle_start_cell_i + 1) in target_programs]
+
+            i += ptt_to_take_for_pgc
 
         assert len(is_chapter) == len(vobidcellids_to_take)
 
@@ -785,8 +826,7 @@ class IsoFileCore:
             if len(adjusted) != len(dvnavchapters):
                 warnings.warn(f'dvdnavchapters length do not match our chapters {len(adjusted)} {len(dvnavchapters)}'
                               ' (open an issue in github)')
-                print(adjusted)
-                print(dvnavchapters)
+                print(adjusted, "\n\n\n", dvnavchapters)
             else:
                 framelen = fpsden / fpsnum
                 for i in range(len(adjusted)):
@@ -795,10 +835,11 @@ class IsoFileCore:
                     # but on ~24p pal rffd it does not lol
                     if abs(adjusted[i] - dvnavchapters[i]) > framelen * 20:
                         warnings.warn(
-                            f'dvdnavchapters length do not match our chapters {len(adjusted)} {len(dvnavchapters)}'
-                            ' (open an issue in github)'
+                            f'dvdnavchapters do not match our chapters {len(adjusted)} {len(dvnavchapters)}'
+                            ' (open an issue in github)\n'
+                            f' index: {i} {adjusted[i]}'
                         )
-                        print(adjusted, dvnavchapters)
+                        print(adjusted, "\n\n\n", dvnavchapters)
                         break
         else:
             debug_print("Skipping sanity check with dvdnav")
@@ -900,7 +941,7 @@ class IsoFileCore:
 
         assert len(dd) == len(rawnode) * 4  # type: ignore
 
-        vobids = list[int]()
+        vobids = list[tuple[int, int]]()
         tff = list[int]()
         rff = list[int]()
         prog = list[int]()
