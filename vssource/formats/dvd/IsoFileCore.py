@@ -11,10 +11,14 @@ from dataclasses import dataclass
 from fractions import Fraction
 from functools import partial
 from itertools import count
-from typing import Any, Callable, Sequence, SupportsFloat
+from typing import Any, Callable, Sequence, SupportsFloat, cast
 
-from vstools import CustomValueError, SPath, T, copy_signature, remap_frames, set_output, to_arr, vs
+from vstools import (
+    CustomValueError, FuncExceptT, SPath, SPathLike, SupportsString, T, copy_signature, get_prop, remap_frames,
+    set_output, to_arr, vs
+)
 
+from ...dataclasses import D2VIndexFrameData
 from ...indexers import D2VWitch, DGIndex, ExternalIndexer
 from ...rff import apply_rff_array, apply_rff_video, cut_array_on_ranges
 from .parsedvd import AUDIO_FORMAT_AC3, AUDIO_FORMAT_LPCM, IFO0, IFOX, SectorReadHelper, to_json
@@ -36,9 +40,9 @@ def debug_print(*args: Any, **kwargs: Any) -> None:
 # https://gist.github.com/jsaowji/ead18b4f1b90381d558eddaf0336164b
 
 # https://gist.github.com/jsaowji/2bbf9c776a3226d1272e93bb245f7538
-def double_check_dvdnav(iso: str, title: int) -> list[float] | None:
+def double_check_dvdnav(iso: SupportsString, title: int) -> list[float] | None:
     try:
-        ap = subprocess.check_output(["dvdsrc_dvdnav_title_ptt_test", iso, str(title)])
+        ap = subprocess.check_output(["dvdsrc_dvdnav_title_ptt_test", str(iso), str(title)])
 
         return list(map(float, ap.splitlines()))
     except FileNotFoundError:
@@ -54,6 +58,14 @@ def absolute_time_from_timecode(timecodes: Sequence[SupportsFloat]) -> list[floa
         absolutetime.append(absolutetime[i] + float(a))
 
     return absolutetime
+
+
+def get_sectorranges_for_vobcellpair(current_vts: IFOX, pair_id: tuple[int, int]) -> list[tuple[int, int]]:
+    return [
+        (e.start_sector, e.last_sector)
+        for e in current_vts.vts_c_adt.cell_adr_table
+        if (e.vob_id, e.cell_id) == pair_id
+    ]
 
 
 @dataclass
@@ -132,7 +144,7 @@ class Title:
     _audios: list[str]
     _patched_end_chapter: int | None
 
-    def split_at(self, splits: list[int], audio: int | list[int] | None = None) -> tuple[SplitTitle, ...] | SplitTitle:
+    def split_at(self, splits: list[int], audio: int | list[int] | None = None) -> tuple[SplitTitle, ...]:
         output_cnt = SplitHelper._sanitize_splits(self, splits)
         video = SplitHelper.split_video(self, splits)
         chapters = SplitHelper.split_chapters(self, splits)
@@ -175,56 +187,66 @@ class Title:
         from: inclusive
         to: inclusive
         """
-        if start == -1:
-            # -1 because last chapter marks the end
-            # and not because 1 indexed
-            t = len(self.chapters) - 1
+        if start < 0:
+            start = len(self.chapters) + start
 
-        if start == 1 and t == len(self.chapters) - 1:
-            return self.split_at([], audio)
+        if end < 0:
+            end = len(self.chapters) + end
+
+        if start == 1 and end == len(self.chapters) - 1:
+            return self.split_at([], audio)[0]
 
         if start == 1:
-            return self.split_at([t + 1], audio)[0]
+            return self.split_at([end + 1], audio)[0]
 
         if end == len(self.chapters) - 1:
             return self.split_at([start], audio)[1]
 
         return self.split_at([start, end + 1], audio)[1]
 
-    def preview(self, splt=None):
+    def preview(self, split: SplitTitle | Sequence[SplitTitle] | None = None) -> None:
         set_output(self.video(), f"title v {self._title}")
-        if splt is not None:
-            if not isinstance(splt, tuple):
-                splt = [splt]
-            for i, a in enumerate(list(splt)):
-                set_output(a.video, f"split {i}")
-            for i, a in enumerate(list(splt)):
-                if isinstance(a.audio, vs.AudioNode):
-                    set_output(a.audio, f"split {i}")
+
+        if split is not None:
+            split = to_arr(split)
+
+            for i, s in enumerate(split):
+                set_output(s.video, f'split {i}')
+
+            for i, s in enumerate(split):
+                if s.audio:
+                    for j, audio in enumerate(s.audio):
+                        set_output(audio, f'split {i} - {j}')
 
     def video(self) -> vs.VideoNode:
         return self.node
 
     def audio(self, i: int = 0) -> vs.AudioNode:
-        self.assert_dvdsrc2()
+        self._assert_dvdsrc2(self.audio)
+
         asd = self._audios[i]
 
-        if asd.startswith("ac3"):
-            anode = vs.core.dvdsrc2.FullVtsAc3(self._core.iso_path, self._vts, i, self._dvdsrc_ranges)
-        elif asd.startswith("lpcm"):
-            anode = vs.core.dvdsrc2.FullVtsLpcm(self._core.iso_path, self._vts, i, self._dvdsrc_ranges)
-        else:
-            raise CustomValueError('invalid audio at index', self.__class__)
         anode: vs.AudioNode
+        args = (self._core.iso_path, self._vts, i, self._dvdsrc_ranges)
+        if asd.startswith("ac3"):
+            anode = vs.core.dvdsrc2.FullVtsAc3(*args)  # type: ignore
+        elif asd.startswith("lpcm"):
+            anode = vs.core.dvdsrc2.FullVtsLpcm(*args)  # type: ignore
+        else:
+            raise CustomValueError('Invalid index for audio node!', self.audio)
 
         prps = anode.get_frame(0).props
-        strt = (prps["Stuff_Start_PTS"] * anode.sample_rate) / 90_000
-        endd = (prps["Stuff_End_PTS"] * anode.sample_rate) / 90_000
-        debug_print("splice", round((strt / anode.sample_rate) * 1000 * 10) / 10,
-                    "ms", round((endd / anode.sample_rate) * 1000 * 10) / 10, "ms")
-        strt = int(strt)
-        endd = int(endd)
-        anode = anode[strt:len(anode) - endd]
+
+        strt = (get_prop(prps, 'Stuff_Start_PTS', int) * anode.sample_rate) / 90_000
+        endd = (get_prop(prps, 'Stuff_End_PTS', int) * anode.sample_rate) / 90_000
+
+        debug_print(
+            "splice", round((strt / anode.sample_rate) * 1000 * 10) / 10,
+            "ms", round((endd / anode.sample_rate) * 1000 * 10) / 10, "ms"
+        )
+
+        start, end = int(strt), int(endd)
+        anode = anode[start:len(anode) - end]
 
         total_dura = (self._absolute_time[-1] + self._duration_times[-1])
         delta = abs(total_dura - anode.num_samples / anode.sample_rate) * 1000
@@ -232,62 +254,60 @@ class Title:
         debug_print(f"delta {delta} ms")
 
         if delta > 50:
-            debug_print(f"WARNING rather big audio/video lenght delta might be indecator that sth is off {delta}")
+            debug_print(f'Rather big audio/video lenght delta might be indecator that something is off {delta}!')
 
         return anode
 
-    def assert_dvdsrc2(self):
+    def _assert_dvdsrc2(self, func: FuncExceptT) -> None:
         if self._dvdsrc_ranges is None or len(self._dvdsrc_ranges) == 0:
-            raise CustomValueError("Title needts to be opened with dvdsrc2", __class__)
+            raise CustomValueError("Title needts to be opened with dvdsrc2!", func)
+
         if not self._core.use_dvdsrc:
-            raise CustomValueError("This feature requires dvdsrc2", __class__)
+            raise CustomValueError("This feature requires dvdsrc2!", func)
 
     def dump_ac3(self, a: str, audio_i: int = 0, only_calc_delay: bool = False) -> float:
-        self.assert_dvdsrc2()
-        if not self._audios[audio_i].startswith("ac3"):
-            raise CustomValueError("autio at {audio_i} is not ac3", __class__)
+        self._assert_dvdsrc2(self.dump_ac3)
 
-        nd = vs.core.dvdsrc2.RawAc3(self._core.iso_path, self._vts, audio_i, self._dvdsrc_ranges)
+        if not self._audios[audio_i].startswith("ac3"):
+            raise CustomValueError(f"Autio at {audio_i} is not ac3", self.dump_ac3)
+
+        nd = cast(vs.AudioNode, vs.core.dvdsrc2.RawAc3(self._core.iso_path, self._vts, audio_i, self._dvdsrc_ranges))
         p0 = nd.get_frame(0).props
 
-        # print(p0["Stuff_Start_PTS"])
-        # print(p0["Stuff_End_PTS"])
-
         if not only_calc_delay:
-            wrt = open(a, "wb")
-            for f in nd.frames():
-                wrt.write(bytes(f[0]))
-            wrt.close()
+            with open(a, 'wb') as wrt:
+                for f in nd.frames():
+                    wrt.write(bytes(f[0]))
 
-        return float(p0["Stuff_Start_PTS"]) / 90_000
+        return float(get_prop(p0, 'Stuff_Start_PTS', int)) / 90_000
 
     def __repr__(self) -> str:
-        chapters = self.chapters + [len(self.node) - 1]
-        chapter_lengths = [self._absolute_time[chapters[i + 1]] - self._absolute_time[chapters[i]]
-                           for i in range(len(self.chapters))]
+        chapters = [*self.chapters, len(self.node) - 1]
+        chapter_lengths = [
+            self._absolute_time[chapters[i + 1]] - self._absolute_time[chapters[i]]
+            for i in range(len(self.chapters))
+        ]
 
-        chapter_lengths = [str(datetime.timedelta(seconds=x)) for x in chapter_lengths]
+        chapter_lengths_str = [str(datetime.timedelta(seconds=x)) for x in chapter_lengths]
         timestrings = [str(datetime.timedelta(seconds=self._absolute_time[x])) for x in self.chapters]
 
-        to_print = "Chapters:\n"
+        to_print = 'Chapters:\n'
         for i in range(len(timestrings)):
-            to_print += "{:02} {:015} {:015} {}".format(i + 1, timestrings[i], chapter_lengths[i], self.chapters[i])
+            to_print += f'{i + 1:02} {timestrings[i]:015} {chapter_lengths_str[i]:015} {self.chapters[i]}'
 
             if i == 0:
-                to_print += " (faked)"
+                to_print += ' (faked)'
 
             if self._patched_end_chapter is not None and i == len(timestrings) - 1:
                 delta = self.chapters[i] - self._patched_end_chapter
-                to_print += f" (originally {self._patched_end_chapter} delta {delta})"
+                to_print += f' (originally {self._patched_end_chapter} delta {delta})'
 
-            to_print += "\n"
+            to_print += '\n'
 
-        to_print += "\n"
-        to_print += f"cellchange: {self.cell_changes}\n"
-        to_print += "\n"
-        to_print += "Audios: (fz)\n"
+        to_print += f'\ncellchange: {self.cell_changes}\n'
+        to_print += '\nAudios: (fz)\n'
         for i, a in enumerate(self._audios):
-            to_print += "{} {}\n".format(i, a)
+            to_print += f'{i} {a}\n'
 
         return to_print.strip()
 
@@ -295,51 +315,53 @@ class Title:
 class SplitHelper:
     @staticmethod
     def split_range_ac3(title: Title, f: int, t: int, audio_i: int, outfile: str) -> float:
-        nd = vs.core.dvdsrc2.RawAc3(title._core.iso_path, title._vts, audio_i, title._dvdsrc_ranges)
+        nd = cast(vs.AudioNode, vs.core.dvdsrc2.RawAc3(title._core.iso_path, title._vts, audio_i, title._dvdsrc_ranges))
         prps = nd.get_frame(0).props
 
-        strt = prps["Stuff_Start_PTS"]
-        endd = prps["Stuff_End_PTS"]
-        debug_print(f"Stuff_Start_PTS pts {strt} Stuff_End_PTS {endd}")
+        start, end = (get_prop(prps, f'Stuff_{x}_PTS', int) for x in ('Start', 'End'))
+
+        debug_print(f"Stuff_Start_PTS pts {start} Stuff_End_PTS {end}")
+
         raw_start = (title._absolute_time[title.chapters[f - 1]] * 90_000)
         raw_end = ((title._absolute_time[title.chapters[t]] + title._duration_times[title.chapters[t]]) * 90_000)
 
-        start_pts = raw_start + strt
+        start_pts = raw_start + start
         end_pts = start_pts + (raw_end - raw_start)
 
-        audio_offset_pts = 0
+        audio_offset_pts = 0.0
 
-        outf = open(outfile, "wb")
-        debug_print(f"start_pts  {start_pts} end_pts {end_pts}")
+        with open(outfile, 'wb') as outf:
+            debug_print(f'start_pts  {start_pts} end_pts {end_pts}')
 
-        i = start_pts // 2880
+            start = int(start_pts / 2880)
 
-        debug_print("first ", i, len(nd))
+            debug_print("first ", start, len(nd))
 
-        while i < len(nd):
-            pkt_start_pts = i * 2880
-            pkt_end_pts = (i + 1) * 2880
+            for i in range(start, len(nd)):
+                pkt_start_pts = i * 2880
+                pkt_end_pts = (i + 1) * 2880
 
-            assert pkt_end_pts > start_pts
+                assert pkt_end_pts > start_pts
 
-            if pkt_start_pts < start_pts:
-                audio_offset_pts = start_pts - pkt_start_pts
-            outf.write(bytes(nd.get_frame(i)[0]))
+                if pkt_start_pts < start_pts:
+                    audio_offset_pts = start_pts - pkt_start_pts
 
-            if pkt_end_pts > end_pts:
-                break
+                outf.write(bytes(nd.get_frame(i)[0]))
 
-            i += 1
+                if pkt_end_pts > end_pts:
+                    break
+
         debug_print("wrote", (i - (start_pts // 2880)))
         debug_print("offset is", (audio_offset_pts) / 90, "ms")
+
         return audio_offset_pts / 90_000
 
     @staticmethod
-    def split_chapters(title: Title, splits: list[int]) -> tuple[list[int]]:
-        out = []
+    def split_chapters(title: Title, splits: list[int]) -> list[list[int]]:
+        out = list[list[int]]()
 
         rebase = title.chapters[0]  # normally 0
-        chaps = []
+        chaps = list[int]()
 
         for i, a in enumerate(title.chapters):
             chaps += [a - rebase]
@@ -353,6 +375,7 @@ class SplitHelper:
             out += [chaps]
 
         assert len(out) == len(splits) + 1
+
         return out
 
     @staticmethod
@@ -368,25 +391,29 @@ class SplitHelper:
         return reta
 
     @staticmethod
-    def _sanitize_splits(title: Title, splits: list[int]):
-        # assert len(splits) >= 1
+    def _sanitize_splits(title: Title, splits: list[int]) -> int:
         assert isinstance(splits, list)
+
         lasta = -1
+
         for a in splits:
             assert isinstance(a, int)
             assert a > lasta
             assert a <= len(title.chapters)
+
             lasta = a
+
         return len(splits) + 1
 
     @staticmethod
     def _cut_split(title: Title, splits: list[int], a: T, b: Callable[[Title, T, int, int], T]) -> tuple[T, ...]:
-        out = []
-        last = 0
+        out, last = list[T](), 0
+
         for s in splits:
             index = s - 1
             out += [b(title, a, last, index)]
             last = index
+
         out += [b(title, a, last, len(title.chapters) - 1)]
 
         return tuple(out)
@@ -404,17 +431,17 @@ class SplitHelper:
         return vnode[f:t]
 
     @staticmethod
-    def _cut_fz_a(title: Title, anode: vs.AudioNode, f: int, t: int) -> vs.AudioNode:
-        ft = [f, t]
+    def _cut_fz_a(title: Title, anode: vs.AudioNode, start: int, end: int) -> vs.AudioNode:
+        chapter_idxs = [title.chapters[i] for i in (start, end)]
+        timecodes = [title._absolute_time[i] for i in chapter_idxs]
+        sample_cuts = [
+            min(round(i * anode.sample_rate), anode.num_samples)
+            for i in timecodes
+        ]
 
-        ft = [title.chapters[i] for i in ft]
-        ft = [title._absolute_time[i] for i in ft]
-        ft = [i * anode.sample_rate for i in ft]
-        ft = [round(i) for i in ft]
-        ft = [min(i, anode.num_samples) for i in ft]
+        samples_start, samples_end, *_ = sample_cuts
 
-        f, t = ft[0], ft[1]
-        return anode[f:t]
+        return anode[samples_start:samples_end]
 
 
 class IsoFileCore:
@@ -424,7 +451,7 @@ class IsoFileCore:
 
     def __init__(
         self, path: SPath | str,
-        indexer: ExternalIndexer | type[ExternalIndexer] = None,
+        indexer: ExternalIndexer | type[ExternalIndexer] | None = None,
     ):
         """
         Only external indexer supported D2VWitch and DGIndex
@@ -449,100 +476,85 @@ class IsoFileCore:
 
         self.iso_path = SPath(path).absolute()
 
-        if not self.iso_path.is_dir() and not self.iso_path.is_file():
-            raise CustomValueError('"path" needs to point to a .ISO or a dir root of DVD', path, self.__class__)
+        if not (self.iso_path.is_dir() and self.iso_path.is_file()):
+            raise CustomValueError('"path" needs to point to a .ISO or a dir root of DVD', str(path), self.__class__)
 
-        read_ifo_from_mount = False
-
+        ifo0: SPathLike | io.BufferedReader | None = None
+        ifos: Sequence[SPathLike | io.BufferedReader] = []
         if self.use_dvdsrc:
-            i0bytes = vs.core.dvdsrc2.Ifo(self.iso_path, 0)
-            if len(i0bytes) <= 30:
-                read_ifo_from_mount = True
-                print('newer Vapoursynth is required for dvdsrc2 information gathering without mounting')
+            _ifo0, *_ifos = [
+                cast(bytes, vs.core.dvdsrc2.Ifo(self.iso_path, i)) for i in range(self.ifo0.num_vts + 1)
+            ]
+
+            if len(_ifo0) <= 30:
+                warnings.warn('Newer VapourSynth is required for dvdsrc2 information gathering without mounting!')
             else:
-                self.ifo0 = IFO0(SectorReadHelper(io.BufferedReader(io.BytesIO(i0bytes))))
-                self.vts = []
+                ifo0, *ifos = [io.BufferedReader(io.BytesIO(x)) for x in (_ifo0, *_ifos)]  # type: ignore
 
-                for i in range(1, self.ifo0.num_vts + 1):
-                    rh = SectorReadHelper(io.BufferedReader(io.BytesIO(vs.core.dvdsrc2.Ifo(self.iso_path, i))))
-                    self.vts += [IFOX(rh)]
+        if not ifo0:
+            ifo0, *ifos = self.ifo_files
 
-        if not self.use_dvdsrc or read_ifo_from_mount:
-            for i, a in enumerate(self.ifo_files):
-                if i == 0:
-                    self.ifo0 = IFO0(SectorReadHelper(a))
-                    self.vts = []
-                else:
-                    self.vts += [IFOX(SectorReadHelper(a))]
+        self.ifo0 = IFO0(SectorReadHelper(ifo0))
+        self.vts = [IFOX(SectorReadHelper(ifo)) for ifo in ifos]
 
         self.json = to_json(self.ifo0, self.vts)
 
-        if not self.has_dvdsrc1:
-            debug_print("Does not have dvdsrc cant double check json with libdvdread")
-        else:
-            dvdsrc_json = json.loads(vs.core.dvdsrc.Json(self.iso_path))
-            try:
-                del dvdsrc_json["dvdpath"]
-                del dvdsrc_json["current_vts"]
-                del dvdsrc_json["current_domain"]
+        if self.has_dvdsrc1:
+            dvdsrc_json = json.loads(cast(str, vs.core.dvdsrc.Json(self.iso_path)))
 
-                for ifo in dvdsrc_json["ifos"]:
-                    del ifo["pgci_ut"]
-                    ifo["pgci_ut"] = []
-            except KeyError:
-                pass
+            for key in ('dvdpath', 'current_vts', 'current_domain'):
+                dvdsrc_json.pop(key, None)
+
+            for ifo in dvdsrc_json.get('ifos', []):
+                ifo['pgci_ut'] = []
 
             ja = json.dumps(dvdsrc_json, sort_keys=True)
             jb = json.dumps(self.json, sort_keys=True)
 
             if ja != jb:
-                warnings.warn(f"libdvdread json does not match python implentation\n"
-                              f"json a,b have been written to {self.output_folder}")
-                open(os.path.join(self.output_folder, "a.json"), "wt").write(ja)
-                open(os.path.join(self.output_folder, "b.json"), "wt").write(jb)
+                warnings.warn(
+                    f"libdvdread json does not match python implentation\n"
+                    f"json a,b have been written to {self.output_folder}"
+                )
+
+                for k, v in [('a', ja), ('b', jb)]:
+                    with open(os.path.join(self.output_folder, f'{k}.json'), 'wt') as file:
+                        file.write(v)
+        else:
+            debug_print("We don't have dvdsrc and can't double check the json output with libdvdread.")
 
         if not self.use_dvdsrc:
+            assert indexer
             self.indexer = indexer if isinstance(indexer, ExternalIndexer) else indexer()
 
         self.title_count = len(self.ifo0.tt_srpt)
 
-    def get_vts(
-        self,
-        title_set_nr: int = 1,
-        d2v_our_rff: bool = False,
-    ) -> vs.VideoNode:
+    def get_vts(self, title_set_nr: int = 1, d2v_our_rff: bool = False) -> vs.VideoNode:
         """
         Gets a full vts.
         only works with dvdsrc2 and d2vsource usese our rff for dvdsrc and d2source rff for d2vsource
 
         mainly useful for debugging and checking if our rff algorithm is good
-
         """
+
+        if not self.use_dvdsrc or d2v_our_rff:
+            rawnode = cast(vs.VideoNode, vs.core.dvdsrc2.FullVts(self.iso_path, vts=title_set_nr))
+            staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
+
         if self.use_dvdsrc:
             vob_input_files = self._get_title_vob_files_for_vts(title_set_nr)
             index_file = self.indexer.index(vob_input_files, output_folder=self.output_folder)[0]
 
             if d2v_our_rff:
-                rawnode = vs.core.dvdsrc2.FullVts(self.iso_path, vts=title_set_nr)
-                staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
-                return apply_rff_video(self.indexer._source_func(index_file, rff=False),
-                                       staff.rff,
-                                       staff.tff,
-                                       staff.prog,
-                                       staff.progseq)
-            else:
-                return self.indexer._source_func(index_file, rff=True)
-        else:
-            rawnode = vs.core.dvdsrc2.FullVts(self.iso_path, vts=title_set_nr)
-            staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
-            return apply_rff_video(rawnode, staff.rff, staff.tff, staff.prog, staff.progseq)
+                return apply_rff_video(
+                    self.indexer._source_func(index_file, rff=False), staff.rff, staff.tff, staff.prog, staff.progseq
+                )
 
-    def get_title(
-        self,
-        title_nr: int = 1,
-        angle_nr: int | None = None,
-        rff_mode: int = 0,
-    ) -> Title:
+            return self.indexer._source_func(index_file, rff=True)
+
+        return apply_rff_video(rawnode, staff.rff, staff.tff, staff.prog, staff.progseq)
+
+    def get_title(self, title_nr: int = 1, angle_nr: int | None = None, rff_mode: int = 0) -> Title:
         """
         Gets a title.
 
@@ -556,12 +568,14 @@ class IsoFileCore:
 
         tt_srpt = self.ifo0.tt_srpt
         title_idx = title_nr - 1
+
         if title_idx < 0 or title_idx >= len(tt_srpt):
-            raise CustomValueError('"title_nr" out of range', self.__class__)
+            raise CustomValueError('"title_nr" out of range', self.get_title)
+
         tt = tt_srpt[title_idx]
 
         if tt.nr_of_angles != 1 and angle_nr is None:
-            raise CustomValueError('no angle_nr given for multi angle title', self.__class__)
+            raise CustomValueError('no angle_nr given for multi angle title', self.get_title)
 
         target_vts = self.vts[tt.title_set_nr - 1]
         target_title = target_vts.vts_ptt_srpt[tt.vts_ttn - 1]
@@ -570,29 +584,29 @@ class IsoFileCore:
 
         for ptt in target_title[1:]:
             if ptt.pgcn != target_title[0].pgcn:
-                raise CustomValueError('title is not one program chain (unsupported currently)', self.__class__)
+                raise CustomValueError('title is not one program chain (unsupported currently)', self.get_title)
 
         pgc_i = target_title[0].pgcn - 1
         title_programs = [a.pgn for a in target_title]
-        targte_pgc = target_vts.vts_pgci.pgcs[pgc_i]
-        pgc_programs = targte_pgc.program_map
+        target_pgc = target_vts.vts_pgci.pgcs[pgc_i]
+        pgc_programs = target_pgc.program_map
 
         if title_programs[0] != 1 or pgc_programs[0] != 1:
-            warnings.warn('WARNING Open Title does not start at the first cell (open issue in github with sample)\n')
+            warnings.warn('Open Title does not start at the first cell (open issue in github with sample)\n')
 
         target_programs = [a[1] for a in list(filter(lambda x: (x[0] + 1) in title_programs, enumerate(pgc_programs)))]
 
         if target_programs != pgc_programs:
-            warnings.warn('WARNING Open the program chain does not include all ptts\n')
+            warnings.warn('Open the program chain does not include all ptts\n')
 
-        vobidcellids_to_take = []
+        vobidcellids_to_take = list[tuple[int, int]]()
         current_angle = 1
-        angle_start_cell_i: int = None
+        angle_start_cell_i: int
 
         is_chapter = []
-        for cell_i in range(len(targte_pgc.cell_position)):
-            cell_position = targte_pgc.cell_position[cell_i]
-            cell_playback = targte_pgc.cell_playback[cell_i]
+        for cell_i in range(len(target_pgc.cell_position)):
+            cell_position = target_pgc.cell_position[cell_i]
+            cell_playback = target_pgc.cell_playback[cell_i]
 
             block_mode = cell_playback.block_mode
 
@@ -631,7 +645,7 @@ class IsoFileCore:
                     end_index = len(admap) - 1
                 idxx += [start_index, end_index]
 
-            rawnode = vs.core.dvdsrc2.FullVts(self.iso_path, vts=tt.title_set_nr, ranges=idxx)
+            rawnode = cast(vs.VideoNode, vs.core.dvdsrc2.FullVts(self.iso_path, vts=tt.title_set_nr, ranges=idxx))
             staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
 
             if not disable_rff:
@@ -650,7 +664,8 @@ class IsoFileCore:
             if len(dvddd.keys()) == 1 and (0, 0) in dvddd.keys():
                 raise CustomValueError(
                     'Youre indexer created a d2v file with only zeros for vobid cellid; '
-                    'This usually means outdated/unpatched D2Vwitch', self.__class__)
+                    'This usually means outdated/unpatched D2Vwitch', self.get_title
+                )
 
             frameranges = []
             for a in vobidcellids_to_take:
@@ -660,7 +675,7 @@ class IsoFileCore:
 
             index_file = self.indexer.index(vob_input_files, output_folder=self.output_folder)[0]
             node = self.indexer._source_func(index_file, rff=False)
-            # node = self.indexer.source(vob_input_files, output_folder=self.output_folder, rff=False)
+
             assert len(node) == len(fflags) == len(vobids) == len(progseq)
 
             progseq = cut_array_on_ranges(progseq, frameranges)
@@ -702,15 +717,16 @@ class IsoFileCore:
                 durationcodes = timecodes
                 absolutetime = absolute_time_from_timecode(timecodes)
 
-                def apply_timecode(n: int, f: vs.VideoFrame, timecodes, absolutetime) -> vs.VideoFrame:
-                    fout = f.copy()
-                    fout.props["_DurationNum"] = timecodes[n].numerator
-                    fout.props["_DurationDen"] = timecodes[n].denominator
-                    fout.props["_AbsoluteTime"] = absolutetime[n]
-                    return fout
-                rnode = vs.core.std.ModifyFrame(rnode, [rnode], partial(apply_timecode,
-                                                                        timecodes=timecodes,
-                                                                        absolutetime=absolutetime))
+                def _apply_timecodes(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
+                    f = f.copy()
+
+                    f.props._DurationNum = timecodes[n].numerator
+                    f.props._DurationDen = timecodes[n].denominator
+                    f.props._AbsoluteTime = absolutetime[n]
+
+                    return f
+
+                rnode = rnode.std.ModifyFrame(rnode, _apply_timecodes)
             else:
                 rffcnt = 0
                 for a in rff:
@@ -724,10 +740,6 @@ class IsoFileCore:
 
                 rnode = vs.core.std.AssumeFPS(rnode, fpsnum=new_fps.numerator, fpsden=new_fps.denominator)
 
-                # timecodes = [float(1.0 / rnode.fps) for _ in range(len(rnode))]
-                # durationcodes = timecodes
-                # absolutetime = absolute_time_from_timecode(timecodes)
-                # stiff do timecodes like rff1 because it would break otherwise
                 timecodes = [Fraction(fpsden * (a + 2), fpsnum * 2) for a in rff]
                 durationcodes = timecodes
                 absolutetime = absolute_time_from_timecode(timecodes)
@@ -784,9 +796,9 @@ class IsoFileCore:
                     if abs(adjusted[i] - dvnavchapters[i]) > framelen * 20:
                         warnings.warn(
                             f'dvdnavchapters length do not match our chapters {len(adjusted)} {len(dvnavchapters)}'
-                            ' (open an issue in github)')
-                        print(adjusted)
-                        print(dvnavchapters)
+                            ' (open an issue in github)'
+                        )
+                        print(adjusted, dvnavchapters)
                         break
         else:
             debug_print("Skipping sanity check with dvdnav")
@@ -804,18 +816,18 @@ class IsoFileCore:
             output_chapters[-1] = lastframe
 
         audios = []
-        for i, a in enumerate(targte_pgc.audio_control):
-            if a.available:
-                audo = target_vts.vtsi_mat.vts_audio_attr[i]
+        for i, ac in enumerate(target_pgc.audio_control):
+            if ac.available:
+                audio = target_vts.vtsi_mat.vts_audio_attr[i]
 
-                if audo.audio_format == AUDIO_FORMAT_AC3:
+                if audio.audio_format == AUDIO_FORMAT_AC3:
                     aformat = "ac3"
-                elif audo.audio_format == AUDIO_FORMAT_LPCM:
+                elif audio.audio_format == AUDIO_FORMAT_LPCM:
                     aformat = "lpcm"
                 else:
                     aformat = "unk"
 
-                audios += [f'{aformat}({audo.language})']
+                audios += [f'{aformat}({audio.language})']
             else:
                 audios += ["none"]
 
@@ -825,15 +837,18 @@ class IsoFileCore:
             audios, patched_end_chapter
         )
 
-    def _d2v_collect_all_frameflags(self, title_set_nr: int) -> Sequence[int]:
+    def _d2v_collect_all_frameflags(self, title_set_nr: int) -> tuple[list[int], list[tuple[int, int]], list[int]]:
         files = self._get_title_vob_files_for_vts(title_set_nr)
         index_file = self.indexer.index(files, output_folder=self.output_folder)[0]
         index_info = self.indexer.get_info(index_file)
 
-        frameflagslst = []
-        vobidlst = []
-        progseqlst = []
+        frameflagslst = list[int]()
+        vobidlst = list[tuple[int, int]]()
+        progseqlst = list[int]()
+
         for iframe in index_info.frame_data:
+            assert isinstance(iframe, D2VIndexFrameData)
+
             vobcell = (iframe.vob, iframe.cell)
 
             progseq = int(((iframe.info & 0b1000000000) != 0))
@@ -846,27 +861,29 @@ class IsoFileCore:
 
         return frameflagslst, vobidlst, progseqlst
 
-    def _d2v_vobid_frameset(self, title_set_nr: int) -> dict:
-        a = self._d2v_collect_all_frameflags(title_set_nr)
-        vobid = a[1]
+    def _d2v_vobid_frameset(self, title_set_nr: int) -> dict[tuple[int, int], list[list[int]]]:
+        _, vobids, _ = self._d2v_collect_all_frameflags(title_set_nr)
 
-        vobidset = dict()
-        for i, a in enumerate(vobid):
+        vobidset = dict[tuple[int, int], list[list[int]]]()
+        for i, a in enumerate(vobids):
             if a not in vobidset:
                 vobidset[a] = [[i, i - 1]]
-            latest = vobidset[a][-1]
-            if latest[1] + 1 == i:
-                latest[1] += 1
-            else:
-                vobidset[a] += [[i, i]]
+
+            last = vobidset[a][-1]
+
+            if last[1] + 1 == i:
+                last[1] += 1
+                continue
+
+            vobidset[a] += [[i, i]]
 
         return vobidset
 
     def _get_title_vob_files_for_vts(self, vts: int) -> Sequence[SPath]:
-        f1 = self.vob_files
-        f1 = list(filter(lambda x: (("VTS_{:02}_".format(vts)) in str(x)), f1))
-        f1 = list(filter(lambda x: (not str(x).upper().endswith("0.VOB")), f1))
-        return f1
+        return [
+            vob for vob in self.vob_files
+            if f'VTS_{vts:02}_' in (s := vob.to_str()) and not s.upper().endswith("0.VOB")
+        ]
 
     def _mount_folder_path(self) -> SPath:
         if self.force_root:
@@ -877,23 +894,27 @@ class IsoFileCore:
 
         return self.iso_path / self._subfolder
 
+    @staticmethod
     def _dvdsrc2_extract_data(rawnode: vs.VideoNode) -> AllNeddedDvdFrameData:
-        dd = bytes(rawnode.get_frame(0).props["InfoFrame"][0])
-        assert len(dd) == len(rawnode) * 4
+        dd = bytes(get_prop(rawnode, 'InfoFrame', vs.VideoFrame)[0])  # type: ignore
 
-        vobids = []
-        tff = []
-        rff = []
-        prog = []
-        progseq = []
-        for i in range(0, len(rawnode)):
+        assert len(dd) == len(rawnode) * 4  # type: ignore
+
+        vobids = list[int]()
+        tff = list[int]()
+        rff = list[int]()
+        prog = list[int]()
+        progseq = list[int]()
+
+        for i in range(len(rawnode)):
             sb = dd[i * 4 + 0]
+
+            vobids += [((dd[i * 4 + 1] << 8) + dd[i * 4 + 2], dd[i * 4 + 3])]
             tff += [(sb & (1 << 0)) >> 0]
             rff += [(sb & (1 << 1)) >> 1]
             prog += [(sb & (1 << 2)) >> 2]
             progseq += [(sb & (1 << 3)) >> 3]
 
-            vobids += [((dd[i * 4 + 1] << 8) + dd[i * 4 + 2], dd[i * 4 + 3])]
         return AllNeddedDvdFrameData(vobids, tff, rff, prog, progseq)
 
     def __repr__(self) -> str:
@@ -978,11 +999,3 @@ class IsoFileCore:
     @abstractmethod
     def _mount(self) -> SPath | None:
         raise NotImplementedError()
-
-
-def get_sectorranges_for_vobcellpair(current_vts: IFOX, pair_id: tuple[int, int]) -> list[tuple[int, int]]:
-    ranges = []
-    for e in current_vts.vts_c_adt.cell_adr_table:
-        if e.vob_id == pair_id[0] and e.cell_id == pair_id[1]:
-            ranges += [(e.start_sector, e.last_sector)]
-    return ranges

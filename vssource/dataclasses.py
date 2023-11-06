@@ -16,8 +16,6 @@ class _SetItemMeta:
 class IndexFileFrameData(_SetItemMeta):
     matrix: int
     pic_type: str
-    vob: int | None
-    cell: int | None
 
 
 @dataclass
@@ -48,6 +46,8 @@ class D2VIndexHeader(_SetItemMeta):
 
 @dataclass
 class D2VIndexFrameData(IndexFileFrameData):
+    vob: int
+    cell: int
     info: int
     skip: int
     position: int
@@ -69,7 +69,8 @@ class DGIndexHeader(_SetItemMeta):
 
 @dataclass
 class DGIndexFrameData(IndexFileFrameData):
-    pass
+    vob: int | None
+    cell: int | None
 
 
 @dataclass
