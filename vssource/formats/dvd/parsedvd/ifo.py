@@ -98,11 +98,11 @@ class IFOX:
         self.vts_ptt_srpt = titles
 
 
-def to_json(ifo0: IFO0, vts: list[IFOX]) -> dict[str, dict[str, Any]]:
-    crnt = {}
+def to_json(ifo0: IFO0, vts: list[IFOX]) -> dict[str, list[dict[str, Any]]]:
+    crnt = dict[str, list[dict[str, Any]]]()
 
     # ifo0
-    i0 = {}
+    i0 = dict[str, list[dict[str, Any]]]()
     i0["tt_srpt"] = [asdict(a) for a in ifo0.tt_srpt]
     i0["pgci_ut"] = []
     i0["vts_c_adt"] = []
