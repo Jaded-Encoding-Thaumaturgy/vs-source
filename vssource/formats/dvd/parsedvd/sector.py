@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from io import BufferedReader
+from io import BufferedReader, BytesIO
 from pprint import pformat
 from struct import unpack
 
@@ -16,7 +16,10 @@ class SectorReadHelper:
     _byte_size_lut = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
     file: SPath | None = None
 
-    def __init__(self, ifo: SPathLike | BufferedReader) -> None:
+    def __init__(self, ifo: bytes | SPathLike | BufferedReader) -> None:
+        if isinstance(ifo, bytes):
+            ifo = BufferedReader(BytesIO(ifo))  # type: ignore
+
         if not isinstance(ifo, BufferedReader):
             self.file = SPath(ifo)
             ifo = self.file.open('rb')

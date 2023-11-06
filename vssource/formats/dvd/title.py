@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 from itertools import count
-from typing import TYPE_CHECKING, Callable, Iterator, Sequence, SupportsIndex, cast, overload
+from typing import TYPE_CHECKING, Callable, Iterator, Sequence, SupportsIndex, overload
 
 from vstools import CustomValueError, FuncExceptT, T, get_prop, set_output, to_arr, vs, vs_object
 
@@ -99,9 +99,9 @@ class TitleAudios(vs_object, list[vs.AudioNode]):
         anode: vs.AudioNode
         args = (self.title._core.iso_path, self.title._vts, i, self.title._dvdsrc_ranges)
         if asd.startswith("ac3"):
-            anode = vs.core.dvdsrc2.FullVtsAc3(*args)  # type: ignore
+            anode = vs.core.dvdsrc2.FullVtsAc3(*args)
         elif asd.startswith("lpcm"):
-            anode = vs.core.dvdsrc2.FullVtsLpcm(*args)  # type: ignore
+            anode = vs.core.dvdsrc2.FullVtsLpcm(*args)
         else:
             raise CustomValueError('Invalid index for audio node!', self.__class__)
 
@@ -248,7 +248,7 @@ class Title:
         if not self._audios[audio_i].startswith("ac3"):
             raise CustomValueError(f"Autio at {audio_i} is not ac3", self.dump_ac3)
 
-        nd = cast(vs.AudioNode, vs.core.dvdsrc2.RawAc3(self._core.iso_path, self._vts, audio_i, self._dvdsrc_ranges))
+        nd = vs.core.dvdsrc2.RawAc3(self._core.iso_path, self._vts, audio_i, self._dvdsrc_ranges)
         p0 = nd.get_frame(0).props
 
         if not only_calc_delay:
@@ -292,7 +292,7 @@ class Title:
 class SplitHelper:
     @staticmethod
     def split_range_ac3(title: Title, f: int, t: int, audio_i: int, outfile: str) -> float:
-        nd = cast(vs.AudioNode, vs.core.dvdsrc2.RawAc3(title._core.iso_path, title._vts, audio_i, title._dvdsrc_ranges))
+        nd = vs.core.dvdsrc2.RawAc3(title._core.iso_path, title._vts, audio_i, title._dvdsrc_ranges)
         prps = nd.get_frame(0).props
 
         start, end = (get_prop(prps, f'Stuff_{x}_PTS', int) for x in ('Start', 'End'))

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import datetime
-import io
 import json
 import os
 import warnings
@@ -9,7 +8,7 @@ from abc import abstractmethod
 from fractions import Fraction
 from typing import Sequence, cast
 
-from vstools import CustomValueError, SPath, get_prop, remap_frames, vs
+from vstools import CustomValueError, Region, SPath, SPathLike, get_prop, remap_frames, vs
 
 from ...dataclasses import AllNeddedDvdFrameData, D2VIndexFrameData
 from ...indexers import D2VWitch, DGIndex, ExternalIndexer
@@ -63,46 +62,26 @@ class IsoFileCore:
         if not (self.iso_path.is_dir() or self.iso_path.is_file()):
             raise CustomValueError('"path" needs to point to a .ISO or a dir root of DVD', str(path), self.__class__)
 
-#        ifo0: SPathLike | io.BufferedReader | None = None
-#        ifos: Sequence[SPathLike | io.BufferedReader] = []
-#        if self.use_dvdsrc:
-#            _ifo0, *_ifos = [
-#                cast(bytes, vs.core.dvdsrc2.Ifo(self.iso_path, i)) for i in range(self.ifo0.num_vts + 1)
-#            ]
-#
-#            if len(_ifo0) <= 30:
-#                warnings.warn('Newer VapourSynth is required for dvdsrc2 information gathering without mounting!')
-#            else:
-#                ifo0, *ifos = [io.BufferedReader(io.BytesIO(x)) for x in (_ifo0, *_ifos)]  # type: ignore
-#
-#        if not ifo0:
-#            ifo0, *ifos = self.ifo_files
-#
-#        self.ifo0 = IFO0(SectorReadHelper(ifo0))
-#        self.vts = [IFOX(SectorReadHelper(ifo)) for ifo in ifos]
-
-        read_ifo_from_mount = False
-
+        ifo0: IFO0 | None = None
+        ifos: Sequence[SPathLike | bytes] = []
         if self.use_dvdsrc:
-            i0bytes = vs.core.dvdsrc2.Ifo(self.iso_path, 0)
-            if len(i0bytes) <= 30:
-                read_ifo_from_mount = True
-                print('newer Vapoursynth is required for dvdsrc2 information gathering without mounting')
+            def _getifo(i: int) -> bytes:
+                return cast(bytes, vs.core.dvdsrc2.Ifo(self.iso_path, i))
+
+            _ifo0b = _getifo(0)
+
+            if len(_ifo0b) <= 30:
+                warnings.warn('Newer VapourSynth is required for dvdsrc2 information gathering without mounting!')
             else:
-                self.ifo0 = IFO0(SectorReadHelper(io.BufferedReader(io.BytesIO(i0bytes))))
-                self.vts = []
+                ifo0 = IFO0(SectorReadHelper(_ifo0b))
+                ifos = [_getifo(i) for i in range(1, ifo0.num_vts + 1)]
 
-                for i in range(1, self.ifo0.num_vts + 1):
-                    rh = SectorReadHelper(io.BufferedReader(io.BytesIO(vs.core.dvdsrc2.Ifo(self.iso_path, i))))
-                    self.vts += [IFOX(rh)]
+        if not ifo0:
+            _ifo0p, *ifos = self.ifo_files
+            ifo0 = IFO0(SectorReadHelper(_ifo0p))
 
-        if not self.use_dvdsrc or read_ifo_from_mount:
-            for i, a in enumerate(self.ifo_files):
-                if i == 0:
-                    self.ifo0 = IFO0(SectorReadHelper(a))
-                    self.vts = []
-                else:
-                    self.vts += [IFOX(SectorReadHelper(a))]
+        self.ifo0 = ifo0
+        self.vts = [IFOX(SectorReadHelper(ifo)) for ifo in ifos]
 
         self.json = to_json(self.ifo0, self.vts)
 
@@ -145,7 +124,7 @@ class IsoFileCore:
         """
 
         if not self.use_dvdsrc or d2v_our_rff:
-            rawnode = cast(vs.VideoNode, vs.core.dvdsrc2.FullVts(self.iso_path, vts=title_set_nr))
+            rawnode = vs.core.dvdsrc2.FullVts(self.iso_path, vts=title_set_nr)
             staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
 
         if self.use_dvdsrc:
@@ -199,12 +178,10 @@ class IsoFileCore:
 
         i = 0
         while i < len(target_title):
-            ptt_to_take_for_pgc = 0
+            ptt_to_take_for_pgc = len([
+                ppt for ppt in target_title[i:] if target_title[i].pgcn == ppt.pgcn
+            ])
 
-            for j in target_title[i:]:
-                if target_title[i].pgcn != j.pgcn:
-                    break
-                ptt_to_take_for_pgc += 1
             assert ptt_to_take_for_pgc >= 1
 
             title_programs = [a.pgn for a in target_title[i:i + ptt_to_take_for_pgc]]
@@ -266,15 +243,16 @@ class IsoFileCore:
                     end_index = len(admap) - 1
                 idxx += [start_index, end_index]
 
-            rawnode = cast(vs.VideoNode, vs.core.dvdsrc2.FullVts(self.iso_path, vts=tt.title_set_nr, ranges=idxx))
+            rawnode = vs.core.dvdsrc2.FullVts(self.iso_path, vts=tt.title_set_nr, ranges=idxx)
             staff = IsoFileCore._dvdsrc2_extract_data(rawnode)
 
             if not disable_rff:
                 rnode = apply_rff_video(rawnode, staff.rff, staff.tff, staff.prog, staff.progseq)
-                vobids = apply_rff_array(staff.vobids, staff.rff, staff.tff, staff.progseq)
+                _vobids = apply_rff_array(staff.vobids, staff.rff, staff.tff, staff.progseq)
             else:
                 rnode = rawnode
-                vobids = staff.vobids
+                _vobids = staff.vobids
+            vobids = [(vid, vid) for vid in _vobids]
             dvdsrc_ranges = idxx
             rff = staff.rff
         else:
@@ -288,9 +266,7 @@ class IsoFileCore:
                     'This usually means outdated/unpatched D2Vwitch', self.get_title
                 )
 
-            frameranges = []
-            for a in vobidcellids_to_take:
-                frameranges += dvddd[a]
+            frameranges = [x for y in [dvddd[a] for a in vobidcellids_to_take] for x in y]
 
             fflags, vobids, progseq = self._d2v_collect_all_frameflags(tt.title_set_nr)
 
@@ -307,35 +283,24 @@ class IsoFileCore:
             rff = [(a & 1) for a in fflags]
 
             if not disable_rff:
-                tff = [(a & 2) >> 1 for a in fflags]
-                prog = [(a & 0b01000000) != 0 for a in fflags]
-
-                # just be sure
-                prog = [int(a) for a in prog]
-                tff = [int(a) for a in tff]
+                tff = [int((a & 2) >> 1) for a in fflags]
+                prog = [int((a & 0b01000000) != 0) for a in fflags]
 
                 rnode = apply_rff_video(node, rff, tff, prog, progseq)
                 vobids = apply_rff_array(vobids, rff, tff, progseq)
             else:
                 rnode = node
-                vobids = vobids
 
-        rfps = float(rnode.fps)
-        abs1 = abs(25 - rfps)
-        abs2 = abs(30 - rfps)
-        if abs1 < abs2:
-            fpsnum, fpsden = 25, 1
-        else:
-            fpsnum, fpsden = 30000, 1001
+        region = Region.from_framerate(rnode.fps)
+        rfps = region.framerate
 
         if not disable_rff:
-            rnode = vs.core.std.AssumeFPS(rnode, fpsnum=fpsnum, fpsden=fpsden)
-            durationcodes = [fpsden / fpsnum for a in range(len(rnode))]
-            absolutetime = [a * (fpsden / fpsnum) for a in range(len(rnode))]
+            rnode = vs.core.std.AssumeFPS(rnode, fpsnum=rfps.numerator, fpsden=rfps.denominator)
+            durationcodes = [Fraction(rfps.denominator, rfps.numerator)] * len(rnode)
+            absolutetime = [a * (rfps.denominator / rfps.numerator) for a in range(len(rnode))]
         else:
             if rff_mode == 1:
-                timecodes = [Fraction(fpsden * (a + 2), fpsnum * 2) for a in rff]
-                durationcodes = timecodes
+                durationcodes = timecodes = [Fraction(rfps.denominator * (a + 2), rfps.numerator * 2) for a in rff]
                 absolutetime = absolute_time_from_timecode(timecodes)
 
                 def _apply_timecodes(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
@@ -349,57 +314,43 @@ class IsoFileCore:
 
                 rnode = rnode.std.ModifyFrame(rnode, _apply_timecodes)
             else:
-                rffcnt = 0
-                for a in rff:
-                    if a:
-                        rffcnt += 1
+                rffcnt = len([a for a in rff if a])
 
                 asd = (rffcnt * 3 + 2 * (len(rff) - rffcnt)) / len(rff)
 
                 fcc = len(rnode) * 5
-                new_fps = Fraction(fpsnum * fcc * 2, int(fcc * fpsden * asd),)
+                new_fps = Fraction(rfps.numerator * fcc * 2, int(fcc * rfps.denominator * asd),)
 
                 rnode = vs.core.std.AssumeFPS(rnode, fpsnum=new_fps.numerator, fpsden=new_fps.denominator)
 
-                timecodes = [Fraction(fpsden * (a + 2), fpsnum * 2) for a in rff]
-                durationcodes = timecodes
+                durationcodes = timecodes = [Fraction(rfps.denominator * (a + 2), rfps.numerator * 2) for a in rff]
                 absolutetime = absolute_time_from_timecode(timecodes)
 
-        changes = []
-        for a in range(1, len(vobids)):
-            if vobids[a] != vobids[a - 1]:
-                changes += [a]
-
-        changes += [len(rnode) - 1]
+        changes = [
+            *(i for i, (pvob, nvob) in enumerate(zip(vobids[:-1], vobids[1:]), start=1) if nvob != pvob), len(rnode) - 1
+        ]
 
         assert len(changes) == len(is_chapter)
 
-        last_chapter_i = 0
-        for i, a in reversed(list(enumerate(is_chapter))):
-            if a:
-                last_chapter_i = i
-                break
+        last_chapter_i = next((i for i, c in reversed(list(enumerate(is_chapter))) if c), 0)
 
-        output_chapters = []
+        output_chapters = list[int]()
         for i in range(len(is_chapter)):
-            a = is_chapter[i]
-
-            if not a:
+            if not is_chapter[i]:
                 continue
-
-            broke = False
 
             for j in range(i + 1, len(is_chapter)):
                 if is_chapter[j]:
-                    broke = True
+                    output_chapters.append(changes[j - 1])
                     break
-            output_chapters += [changes[last_chapter_i] if not broke else changes[j - 1]]
+            else:
+                output_chapters.append(changes[last_chapter_i])
 
         dvnavchapters = double_check_dvdnav(self.iso_path, title_nr)
 
         if dvnavchapters is not None:  # and (rff_mode == 0 or rff_mode == 2):
             # ???????
-            if fpsden == 1001:
+            if rfps.denominator == 1001:
                 dvnavchapters = [a * 1.001 for a in dvnavchapters]
 
             adjusted = [absolutetime[i] for i in output_chapters]  # [1:len(output_chapters)-1] ]
@@ -408,7 +359,7 @@ class IsoFileCore:
                               ' (open an issue in github)')
                 print(adjusted, "\n\n\n", dvnavchapters)
             else:
-                framelen = fpsden / fpsnum
+                framelen = rfps.denominator / rfps.numerator
                 for i in range(len(adjusted)):
                     # tolerance no idea why so big
                     # on hard telecine ntcs it matches up almost perfectly
@@ -452,9 +403,11 @@ class IsoFileCore:
             else:
                 audios += ["none"]
 
+        durationcodesf = list(map(float, durationcodes))
+
         return Title(
             rnode, output_chapters, changes, self, title_nr, tt.title_set_nr,
-            vobidcellids_to_take, dvdsrc_ranges, absolutetime, durationcodes,
+            vobidcellids_to_take, dvdsrc_ranges, absolutetime, durationcodesf,
             audios, patched_end_chapter
         )
 
@@ -482,21 +435,21 @@ class IsoFileCore:
 
         return frameflagslst, vobidlst, progseqlst
 
-    def _d2v_vobid_frameset(self, title_set_nr: int) -> dict[tuple[int, int], list[list[int]]]:
+    def _d2v_vobid_frameset(self, title_set_nr: int) -> dict[tuple[int, int], list[tuple[int, int]]]:
         _, vobids, _ = self._d2v_collect_all_frameflags(title_set_nr)
 
-        vobidset = dict[tuple[int, int], list[list[int]]]()
+        vobidset = dict[tuple[int, int], list[tuple[int, int]]]()
         for i, a in enumerate(vobids):
             if a not in vobidset:
-                vobidset[a] = [[i, i - 1]]
+                vobidset[a] = [(i, i - 1)]
 
             last = vobidset[a][-1]
 
             if last[1] + 1 == i:
-                last[1] += 1
+                vobidset[a][-1] = (last[0], last[1] + 1)
                 continue
 
-            vobidset[a] += [[i, i]]
+            vobidset[a] += [(i, i)]
 
         return vobidset
 
