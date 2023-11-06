@@ -14,17 +14,16 @@ __all__ = [
 
 class SectorReadHelper:
     _byte_size_lut = {1: 'B', 2: 'H', 4: 'I', 8: 'Q'}
+    file: SPath | None = None
 
     def __init__(self, ifo: SPathLike | BufferedReader) -> None:
         if not isinstance(ifo, BufferedReader):
             self.file = SPath(ifo)
             ifo = self.file.open('rb')
-        else:
-            self.file = None
 
         self.ifo = ifo
 
-    def __del__(self):
+    def __del__(self) -> None:
         if self.file is not None and self.ifo and not self.ifo.closed:
             self.ifo.close()
 

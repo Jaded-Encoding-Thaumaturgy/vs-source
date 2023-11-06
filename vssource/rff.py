@@ -38,7 +38,7 @@ def apply_rff_video(
 ) -> vs.VideoNode:
     assert len(node) == len(rff) == len(tff) == len(prog) == len(prog_seq)
 
-    fields = []
+    fields = list[dict[str, int]]()
     tfffs = node.std.RemoveFrameProps(['_FieldBased', '_Field']).std.SeparateFields(True)
 
     for i, current_prg_seq, current_prg, current_rff, current_tff in zip(count(), prog_seq, prog, rff, tff):
@@ -51,8 +51,8 @@ def apply_rff_video(
                 second_field = 2 * i
 
             fields += [
-                {"n": first_field, "tf": current_tff, "prg": False},
-                {"n": second_field, "tf": not current_tff, "prg": False}
+                {'n': first_field, 'tf': current_tff, 'prg': False},
+                {'n': second_field, 'tf': not current_tff, 'prg': False}
             ]
 
             if current_rff:
@@ -65,7 +65,7 @@ def apply_rff_video(
             if current_rff:
                 cnt += 1 + int(current_tff)
 
-            fields += [{"n": 2 * i, "tf": 1, "prg": True}, {"n": 2 * i + 1, "tf": 0, "prg": True}] * cnt
+            fields += [{'n': 2 * i, 'tf': 1, 'prg': True}, {'n': 2 * i + 1, 'tf': 0, 'prg': True}] * cnt
 
     # TODO: mark known progressive frames as progressive
 
@@ -86,14 +86,12 @@ def apply_rff_video(
     final = remap_frames(tfffs, [x['n'] for x in fields])
 
     def _set_field(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
-        fout, fld = f.copy(), fields[n]
+        f = f.copy()
 
-        if '_FieldBased' in fout.props:
-            del fout.props['_FieldBased']
+        f.props.pop('_FieldBased', None)
+        f.props._Field = fields[n]['tf']
 
-        fout.props['_Field'] = fld['tf']
-
-        return fout
+        return f
 
     final = final.std.ModifyFrame(final, _set_field)
 

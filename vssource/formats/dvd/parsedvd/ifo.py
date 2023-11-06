@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import os
+from dataclasses import asdict, dataclass
+from typing import Any
 
-
-from .sector import SectorReadHelper
-
-
-from dataclasses import dataclass, asdict
-
-from .vtsi_mat import VTSIMat
 from .c_adt import CADT
+from .sector import SectorReadHelper
 from .vts_pgci import VTSPgci
+from .vtsi_mat import VTSIMat
 
 
 @dataclass
@@ -75,7 +72,7 @@ class IFOX:
         for _ in range(cnt):
             self.vts_vobu_admap += [reader._unpack_byte(4)[0]]
 
-    def _vts_ptt_srpt(self, reader: SectorReadHelper):
+    def _vts_ptt_srpt(self, reader: SectorReadHelper) -> None:
         reader._goto_sector_ptr(0x00C8)
         num, _res, end = reader._unpack_byte(2, 2, 4)
 
@@ -101,7 +98,7 @@ class IFOX:
         self.vts_ptt_srpt = titles
 
 
-def to_json(ifo0: IFO0, vts: list[IFOX]):
+def to_json(ifo0: IFO0, vts: list[IFOX]) -> dict[str, dict[str, Any]]:
     crnt = {}
 
     # ifo0

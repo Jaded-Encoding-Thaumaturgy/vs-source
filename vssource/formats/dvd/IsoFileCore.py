@@ -2,22 +2,22 @@ from __future__ import annotations
 
 import datetime
 import io
-from itertools import count
 import json
 import os
-import warnings
 import subprocess
+import warnings
 from abc import abstractmethod
 from dataclasses import dataclass
 from fractions import Fraction
 from functools import partial
-from typing import Any, Sequence, SupportsFloat
-from vstools import CustomValueError, SPath, remap_frames, set_output, vs, copy_signature
+from itertools import count
+from typing import Any, Callable, Sequence, SupportsFloat
+
+from vstools import CustomValueError, SPath, T, copy_signature, remap_frames, set_output, to_arr, vs
 
 from ...indexers import D2VWitch, DGIndex, ExternalIndexer
 from ...rff import apply_rff_array, apply_rff_video, cut_array_on_ranges
-from .parsedvd.ifo import IFO0, IFOX, SectorReadHelper, to_json
-from .parsedvd.vtsi_mat import AUDIO_FORMAT_LPCM, AUDIO_FORMAT_AC3
+from .parsedvd import AUDIO_FORMAT_AC3, AUDIO_FORMAT_LPCM, IFO0, IFOX, SectorReadHelper, to_json
 
 __all__ = [
     'IsoFileCore', 'Title'
@@ -68,7 +68,7 @@ class AllNeddedDvdFrameData:
 @dataclass
 class SplitTitle:
     video: vs.VideoNode
-    audio: vs.AudioNode | list[vs.AudioNode] | None
+    audio: list[vs.AudioNode] | None
     chapters: list[int]
 
     _title: Title
@@ -132,76 +132,64 @@ class Title:
     _audios: list[str]
     _patched_end_chapter: int | None
 
-    def split_at(self, splits: list[int], audio: list[int] | int | None = None) -> tuple[SplitTitle, ...] | SplitTitle:
+    def split_at(self, splits: list[int], audio: int | list[int] | None = None) -> tuple[SplitTitle, ...] | SplitTitle:
         output_cnt = SplitHelper._sanitize_splits(self, splits)
         video = SplitHelper.split_video(self, splits)
         chapters = SplitHelper.split_chapters(self, splits)
-        audios = None
-        if audio is not None:
-            if isinstance(audio, int):
-                audio = [audio]
+
+        audios: list[list[vs.AudioNode] | None]
+
+        if audio is not None and (audio := to_arr(audio)):
             audio_per_output_cnt = len(audio)
 
-            auds = []
-            for a in audio:
-                auds += [SplitHelper.split_audio(self, splits, a)]
+            auds = [SplitHelper.split_audio(self, splits, a) for a in audio]
 
-            audios = []
-
-            for i in range(output_cnt):
-                lst = []
-                for j in range(audio_per_output_cnt):
-                    lst += [auds[j][i]]
-                audios += [lst]
+            audios = [
+                [auds[j][i] for j in range(audio_per_output_cnt)] for i in range(output_cnt)
+            ]
+        else:
+            audios = [None] * output_cnt
 
         fromy = 1
-        from_to_s = []
+        from_to_s = list[tuple[int, int]]()
+
         for j in splits:
             from_to_s += [(fromy, j - 1)]
             fromy = j
+
         from_to_s += [(fromy, len(self.chapters) - 1)]
 
-        reta = []
-        for i in range(output_cnt):
-            a = None
-            if audios is not None:
-                a = audios[i]
-                if len(a) == 1:
-                    a = a[0]
+        return tuple(
+            SplitTitle(v, a, c, self, f) for v, a, c, f in zip(video, audios, chapters, from_to_s)
+        )
 
-            reta += [SplitTitle(video[i], a, chapters[i], self, from_to_s[i])]
+    def split_ranges(
+        self, split: list[tuple[int, int]], audio: list[int] | int | None = None
+    ) -> tuple[SplitTitle, ...]:
+        return tuple(self.split_range(start, end, audio) for start, end in split)
 
-        if len(reta) == 1:
-            return reta[0]
-        return tuple(reta)
-
-    def split_ranges(self, split: list[tuple[int, int] | int],
-                     audio: list[int] | int | None = None) -> tuple[SplitTitle, ...]:
-        assert isinstance(split, list)
-
-        return tuple([self.split_range(s[0], s[1], audio) for s in split])
-
-    def split_range(self, f: int, t: int, audio: list[int] | int | None = None) -> SplitTitle:
-        '''
+    def split_range(self, start: int, end: int, audio: list[int] | int | None = None) -> SplitTitle:
+        """
         starting from 1
 
         from: inclusive
         to: inclusive
-        '''
-        if t == -1:
+        """
+        if start == -1:
             # -1 because last chapter marks the end
             # and not because 1 indexed
             t = len(self.chapters) - 1
 
-        if f == 1 and t == len(self.chapters) - 1:
+        if start == 1 and t == len(self.chapters) - 1:
             return self.split_at([], audio)
 
-        if f == 1:
+        if start == 1:
             return self.split_at([t + 1], audio)[0]
 
-        if t == len(self.chapters) - 1:
-            return self.split_at([f], audio)[1]
-        return self.split_at([f, t + 1], audio)[1]
+        if end == len(self.chapters) - 1:
+            return self.split_at([start], audio)[1]
+
+        return self.split_at([start, end + 1], audio)[1]
 
     def preview(self, splt=None):
         set_output(self.video(), f"title v {self._title}")
@@ -305,6 +293,7 @@ class Title:
 
 
 class SplitHelper:
+    @staticmethod
     def split_range_ac3(title: Title, f: int, t: int, audio_i: int, outfile: str) -> float:
         nd = vs.core.dvdsrc2.RawAc3(title._core.iso_path, title._vts, audio_i, title._dvdsrc_ranges)
         prps = nd.get_frame(0).props
@@ -345,6 +334,7 @@ class SplitHelper:
         debug_print("offset is", (audio_offset_pts) / 90, "ms")
         return audio_offset_pts / 90_000
 
+    @staticmethod
     def split_chapters(title: Title, splits: list[int]) -> tuple[list[int]]:
         out = []
 
@@ -365,16 +355,19 @@ class SplitHelper:
         assert len(out) == len(splits) + 1
         return out
 
+    @staticmethod
     def split_video(title: Title, splits: list[int]) -> tuple[vs.VideoNode, ...]:
         reta = SplitHelper._cut_split(title, splits, title.node, SplitHelper._cut_fz_v)
         assert len(reta) == len(splits) + 1
         return reta
 
+    @staticmethod
     def split_audio(title: Title, splits: list[int], i: int = 0) -> tuple[vs.AudioNode, ...]:
         reta = SplitHelper._cut_split(title, splits, title.audio(i), SplitHelper._cut_fz_a)
         assert len(reta) == len(splits) + 1
         return reta
 
+    @staticmethod
     def _sanitize_splits(title: Title, splits: list[int]):
         # assert len(splits) >= 1
         assert isinstance(splits, list)
@@ -386,7 +379,8 @@ class SplitHelper:
             lasta = a
         return len(splits) + 1
 
-    def _cut_split(title: Title, splits: list[int], a, b) -> tuple[vs.VideoNode, ...]:
+    @staticmethod
+    def _cut_split(title: Title, splits: list[int], a: T, b: Callable[[Title, T, int, int], T]) -> tuple[T, ...]:
         out = []
         last = 0
         for s in splits:
@@ -397,6 +391,7 @@ class SplitHelper:
 
         return tuple(out)
 
+    @staticmethod
     def _cut_fz_v(title: Title, vnode: vs.VideoNode, f: int, t: int) -> vs.VideoNode:
         # starting 0
         # end inclusive
@@ -408,6 +403,7 @@ class SplitHelper:
         assert f <= t
         return vnode[f:t]
 
+    @staticmethod
     def _cut_fz_a(title: Title, anode: vs.AudioNode, f: int, t: int) -> vs.AudioNode:
         ft = [f, t]
 
@@ -431,12 +427,12 @@ class IsoFileCore:
         use_dvdsrc: None | int = None,
         indexer: ExternalIndexer | type[ExternalIndexer] = None,
     ):
-        '''
+        """
         Only external indexer supported D2VWitch and DGIndex
 
         indexer only used if use_dvdsrc == 0
 
-        '''
+        """
         self.force_root = False
         self.output_folder = "/tmp" if os.name != "nt" else "C:/tmp"
 

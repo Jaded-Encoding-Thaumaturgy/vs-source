@@ -1,5 +1,14 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
+
 from vstools import Region
+
+__all__ = [
+    'bcd_to_int',
+    'TimeSpan',
+    'VTS_FRAMERATE'
+]
 
 
 def bcd_to_int(bcd: int) -> int:
