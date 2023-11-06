@@ -18,7 +18,9 @@ __all__ = [
     'DGIndexFooter',
 
     'D2VIndexFileInfo',
-    'DGIndexFileInfo'
+    'DGIndexFileInfo',
+
+    'AllNeddedDvdFrameData'
 ]
 
 
@@ -110,3 +112,12 @@ class DGIndexFileInfo(_IndexFileInfoBase):
 
 
 IndexFileType = Union[D2VIndexFileInfo, DGIndexFileInfo]
+
+
+@dataclass
+class AllNeddedDvdFrameData:
+    vobids: list[int]
+    tff: list[int]
+    rff: list[int]
+    prog: list[int]
+    progseq: list[int]

@@ -1,15 +1,27 @@
 from __future__ import annotations
 
+import os
 import re
-from typing import Sequence
+from typing import Any, Sequence
 
-from vstools import SPath
+from vstools import SPath, copy_signature
 
 __all__ = [
+    'debug_print',
+
     'opt_int', 'opt_ints',
 
     'get_all_vobs'
 ]
+
+
+DVD_DEBUG = "DVD_DEBUG" in os.environ
+
+
+@copy_signature(print)
+def debug_print(*args: Any, **kwargs: Any) -> None:
+    if DVD_DEBUG:
+        print(*args, **kwargs)
 
 
 def opt_int(val: str | int | None) -> int | None:
