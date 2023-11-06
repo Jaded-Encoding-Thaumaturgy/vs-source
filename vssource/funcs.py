@@ -139,7 +139,7 @@ def source(
                 raise RuntimeError
 
             try:
-                from pymediainfo import MediaInfo
+                from pymediainfo import MediaInfo  # type: ignore
             except ImportError:
                 ...
             else:
