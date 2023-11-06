@@ -31,6 +31,9 @@ __all__ = [
 
 DVD_DEBUG = "DVD_DEBUG" in os.environ
 
+PTS_SYNC = 2880
+PCR_CLOCK = 90_000
+
 
 @copy_signature(print)
 def debug_print(*args: Any, **kwargs: Any) -> None:
@@ -167,8 +170,8 @@ class TitleAudios(vs_object, list[vs.AudioNode]):
         else:
             raise CustomValueError('Invalid index for audio node!', self.__class__)
 
-        strt = (get_prop(anode, 'Stuff_Start_PTS', int) * anode.sample_rate) / 90_000
-        endd = (get_prop(anode, 'Stuff_End_PTS', int) * anode.sample_rate) / 90_000
+        strt = (get_prop(anode, 'Stuff_Start_PTS', int) * anode.sample_rate) / PCR_CLOCK
+        endd = (get_prop(anode, 'Stuff_End_PTS', int) * anode.sample_rate) / PCR_CLOCK
 
         debug_print(
             "splice", round((strt / anode.sample_rate) * 1000 * 10) / 10,
@@ -318,7 +321,7 @@ class Title:
                 for f in nd.frames():
                     wrt.write(bytes(f[0]))
 
-        return float(get_prop(p0, 'Stuff_Start_PTS', int)) / 90_000
+        return float(get_prop(p0, 'Stuff_Start_PTS', int)) / PCR_CLOCK
 
     def __repr__(self) -> str:
         chapters = [*self.chapters, len(self.video) - 1]
@@ -361,8 +364,8 @@ class SplitHelper:
 
         debug_print(f"Stuff_Start_PTS pts {start} Stuff_End_PTS {end}")
 
-        raw_start = (title._absolute_time[title.chapters[f - 1]] * 90_000)
-        raw_end = ((title._absolute_time[title.chapters[t]] + title._duration_times[title.chapters[t]]) * 90_000)
+        raw_start = (title._absolute_time[title.chapters[f - 1]] * PCR_CLOCK)
+        raw_end = ((title._absolute_time[title.chapters[t]] + title._duration_times[title.chapters[t]]) * PCR_CLOCK)
 
         start_pts = raw_start + start
         end_pts = start_pts + (raw_end - raw_start)
@@ -372,13 +375,13 @@ class SplitHelper:
         with open(outfile, 'wb') as outf:
             debug_print(f'start_pts  {start_pts} end_pts {end_pts}')
 
-            start = int(start_pts / 2880)
+            start = int(start_pts / PTS_SYNC)
 
             debug_print("first ", start, len(nd))
 
             for i in range(start, len(nd)):
-                pkt_start_pts = i * 2880
-                pkt_end_pts = (i + 1) * 2880
+                pkt_start_pts = i * PTS_SYNC
+                pkt_end_pts = (i + 1) * PTS_SYNC
 
                 assert pkt_end_pts > start_pts
 
@@ -390,10 +393,10 @@ class SplitHelper:
                 if pkt_end_pts > end_pts:
                     break
 
-        debug_print("wrote", (i - (start_pts // 2880)))
+        debug_print("wrote", (i - (start_pts // PTS_SYNC)))
         debug_print("offset is", (audio_offset_pts) / 90, "ms")
 
-        return audio_offset_pts / 90_000
+        return audio_offset_pts / PCR_CLOCK
 
     @staticmethod
     def split_chapters(title: Title, splits: list[int]) -> list[list[int]]:
