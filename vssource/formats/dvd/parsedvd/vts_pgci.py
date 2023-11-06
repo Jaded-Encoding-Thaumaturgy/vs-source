@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from .sector import SectorReadHelper
 import os
+from dataclasses import dataclass
+
+from .sector import SectorReadHelper
 from .timespan import TimeSpan
 
 __all__ = [

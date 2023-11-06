@@ -3,6 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from .sector import SectorReadHelper
 
+__all__ = [
+    'AUDIO_FORMAT_AC3',
+    'AUDIO_FORMAT_LPCM',
+
+    'VTSVideoAttr',
+    'AudioAttr',
+    'VTSIMat'
+]
+
 
 AUDIO_FORMAT_AC3 = 0
 AUDIO_FORMAT_LPCM = 4

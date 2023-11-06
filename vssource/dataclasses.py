@@ -6,6 +6,21 @@ from typing import Union
 
 from vstools import SPath
 
+__all__ = [
+    'IndexFileFrameData',
+    'IndexFileInfo',
+
+    'D2VIndexHeader',
+    'D2VIndexFrameData',
+
+    'DGIndexHeader',
+    'DGIndexFrameData',
+    'DGIndexFooter',
+
+    'D2VIndexFileInfo',
+    'DGIndexFileInfo'
+]
+
 
 class _SetItemMeta:
     def __setitem__(self, key: str, value: float | int) -> None:

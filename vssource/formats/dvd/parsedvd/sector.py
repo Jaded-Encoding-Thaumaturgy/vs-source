@@ -8,7 +8,7 @@ from struct import unpack
 from vstools import SPath, SPathLike
 
 __all__ = [
-    'SectorReadHelper',
+    'SectorReadHelper'
 ]
 
 

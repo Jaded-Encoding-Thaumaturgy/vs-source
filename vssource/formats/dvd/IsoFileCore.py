@@ -9,7 +9,6 @@ import warnings
 from abc import abstractmethod
 from dataclasses import dataclass
 from fractions import Fraction
-from functools import partial
 from itertools import count
 from typing import Any, Callable, Sequence, SupportsFloat, cast
 
