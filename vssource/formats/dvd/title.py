@@ -161,6 +161,12 @@ class Title:
     def __post_init__(self) -> None:
         self.audios = TitleAudios(self)
 
+    @property
+    def audio(self) -> vs.AudioNode:
+        if not self.audios:
+            raise CustomValueError('No main audio found in this Title!')
+        return self.audios[0]
+
     def split_at(self, splits: list[int], audio: int | list[int] | None = None) -> tuple[SplitTitle, ...]:
         output_cnt = SplitHelper._sanitize_splits(self, splits)
         video = SplitHelper.split_video(self, splits)
