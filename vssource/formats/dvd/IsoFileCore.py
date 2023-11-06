@@ -130,7 +130,7 @@ class SplitTitle:
 
 @dataclass
 class Title:
-    node: vs.VideoNode
+    video: vs.VideoNode
     chapters: list[int]
 
     # only for reference for gui or sth
@@ -207,7 +207,7 @@ class Title:
         return self.split_at([start, end + 1], audio)[1]
 
     def preview(self, split: SplitTitle | Sequence[SplitTitle] | None = None) -> None:
-        set_output(self.video(), f"title v {self._title}")
+        set_output(self.video, f"title v {self._title}")
 
         if split is not None:
             split = to_arr(split)
@@ -219,9 +219,6 @@ class Title:
                 if s.audio:
                     for j, audio in enumerate(s.audio):
                         set_output(audio, f'split {i} - {j}')
-
-    def video(self) -> vs.VideoNode:
-        return self.node
 
     def audio(self, i: int = 0) -> vs.AudioNode:
         self._assert_dvdsrc2(self.audio)
@@ -284,7 +281,7 @@ class Title:
         return float(get_prop(p0, 'Stuff_Start_PTS', int)) / 90_000
 
     def __repr__(self) -> str:
-        chapters = [*self.chapters, len(self.node) - 1]
+        chapters = [*self.chapters, len(self.video) - 1]
         chapter_lengths = [
             self._absolute_time[chapters[i + 1]] - self._absolute_time[chapters[i]]
             for i in range(len(self.chapters))
@@ -382,7 +379,7 @@ class SplitHelper:
 
     @staticmethod
     def split_video(title: Title, splits: list[int]) -> tuple[vs.VideoNode, ...]:
-        reta = SplitHelper._cut_split(title, splits, title.node, SplitHelper._cut_fz_v)
+        reta = SplitHelper._cut_split(title, splits, title.video, SplitHelper._cut_fz_v)
         assert len(reta) == len(splits) + 1
         return reta
 

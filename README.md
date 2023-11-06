@@ -83,7 +83,7 @@ title1 = iso.get_title(1)
 # prints audio and chapter information
 print(title1)
 
-title1.video().set_output(0)
+title1.video.set_output(0)
 title1.audio(0).set_output(1)
 
 title1.dump_ac3('full_title.ac3', 0)
