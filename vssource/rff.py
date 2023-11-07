@@ -51,13 +51,15 @@ def apply_rff_video(
                 second_field = 2 * i
 
             fields += [
-                {'n': first_field, 'tf': current_tff, 'prg': False},
-                {'n': second_field, 'tf': not current_tff, 'prg': False}
+                {'n': first_field, 'tf': current_tff, 'prg': False, 'repeat': False},
+                {'n': second_field, 'tf': not current_tff, 'prg': False, 'repeat': False}
             ]
 
             if current_rff:
                 assert current_prg
-                fields += [deepcopy(fields[-2])]
+                repeat_field = deepcopy(fields[-2])
+                repeat_field['repeat'] = True
+                fields.append(repeat_field)
         else:
             assert current_prg
 
@@ -65,7 +67,7 @@ def apply_rff_video(
             if current_rff:
                 cnt += 1 + int(current_tff)
 
-            fields += [{'n': 2 * i, 'tf': 1, 'prg': True}, {'n': 2 * i + 1, 'tf': 0, 'prg': True}] * cnt
+            fields += [{'n': 2 * i, 'tf': 1, 'prg': True, 'repeat': False}, {'n': 2 * i + 1, 'tf': 0, 'prg': True, 'repeat': False}] * cnt
 
     # TODO: mark known progressive frames as progressive
 
@@ -96,6 +98,18 @@ def apply_rff_video(
     final = final.std.ModifyFrame(final, _set_field)
 
     woven = final.std.DoubleWeave()[::2]
+
+    def _set_repeat(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
+        f = f.copy()
+        if fields[n * 2]['repeat']:
+            f.props['RepeatedField'] = 1
+        elif fields[n * 2 + 1]['repeat']:
+            f.props['RepeatedField'] = 0
+        else:
+            f.props['RepeatedField'] = -1
+        return f
+
+    woven = woven.std.ModifyFrame(woven, _set_repeat)
 
     def _update_progressive(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
         fout = f.copy()
