@@ -32,6 +32,7 @@ class IsoFileCore:
     ifo0: IFO0
     vts: list[IFOX]
     indexer: DVDSRCIndexer | DVDExtIndexer
+    title_count: int
 
     def __init__(
         self, path: SPath | str,
@@ -64,7 +65,7 @@ class IsoFileCore:
         ifos: Sequence[SPathLike | bytes] = []
         if indexer is None:
             def _getifo(i: int) -> bytes:
-                return cast(bytes, core.dvdsrc2.Ifo(self.iso_path, i))
+                return cast(bytes, core.dvdsrc2.Ifo(str(self.iso_path), i))
 
             _ifo0b = _getifo(0)
 
@@ -92,6 +93,8 @@ class IsoFileCore:
             self.indexer = indexer() if isinstance(indexer, type) else indexer
             self.indexer.iso_path = self.iso_path
 
+        self.title_count = len(self.ifo0.tt_srpt)
+
     def get_vts(self, title_set_nr: int = 1, d2v_our_rff: bool = False) -> vs.VideoNode:
         """
         Gets a full vts.
@@ -101,7 +104,7 @@ class IsoFileCore:
         """
 
         if isinstance(self.indexer, DVDSRCIndexer) or d2v_our_rff:
-            fullvts = core.dvdsrc2.FullVts(self.iso_path, vts=title_set_nr)
+            fullvts = core.dvdsrc2.FullVts(str(self.iso_path), vts=title_set_nr)
 
         if isinstance(self.indexer, ExternalIndexer):
             vob_input_files = self._get_title_vob_files_for_vts(title_set_nr)
@@ -206,7 +209,7 @@ class IsoFileCore:
 
         rnode, rff, vobids, dvdsrc_ranges = self.indexer.parse_vts(
             tt, disable_rff, vobidcellids_to_take, target_vts, self.output_folder,
-            self._get_title_vob_files_for_vts(tt.title_set_nr)
+            [] if isinstance(self.indexer, DVDSRCIndexer) else self._get_title_vob_files_for_vts(tt.title_set_nr)
         )
 
         region = Region.from_framerate(rnode.fps)
@@ -431,7 +434,7 @@ class IsoFileCore:
         if hasattr(core, 'dvdsrc'):
             our_json = to_json(self.ifo0, self.vts)
 
-            dvdsrc_json = json.loads(cast(str, core.dvdsrc.Json(self.iso_path)))
+            dvdsrc_json = json.loads(cast(str, core.dvdsrc.Json(str(self.iso_path))))
 
             for key in ('dvdpath', 'current_vts', 'current_domain'):
                 dvdsrc_json.pop(key, None)

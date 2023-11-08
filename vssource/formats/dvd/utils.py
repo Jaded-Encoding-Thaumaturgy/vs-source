@@ -9,11 +9,11 @@ __all__ = [
     'double_check_dvdnav',
     'absolute_time_from_timecode',
 
-    'PTS_SYNC', 'PCR_CLOCK'
+    'AC3_FRAME_LENGTH', 'PCR_CLOCK'
 ]
 
-
-PTS_SYNC = 2880
+# http://www.mpucoder.com/DVD/ass-hdr.html
+AC3_FRAME_LENGTH = 2880
 PCR_CLOCK = 90_000
 
 

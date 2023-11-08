@@ -45,7 +45,7 @@ class DVDSRCIndexer(DVDIndexer):
                 end_index = len(admap) - 1
             idxx += [start_index, end_index]
 
-        rawnode = core.dvdsrc2.FullVts(self.iso_path, vts=title.title_set_nr, ranges=idxx)
+        rawnode = core.dvdsrc2.FullVts(str(self.iso_path), vts=title.title_set_nr, ranges=idxx)
         staff = self._extract_data(rawnode)
 
         if not disable_rff:
@@ -54,10 +54,9 @@ class DVDSRCIndexer(DVDIndexer):
         else:
             rnode = rawnode
             _vobids = staff.vobids
-        vobids = [(vid, vid) for vid in _vobids]
+        vobids = _vobids
         dvdsrc_ranges = idxx
         rff = staff.rff
-
         return rnode, rff, vobids, dvdsrc_ranges
 
     def _extract_data(self, rawnode: vs.VideoNode) -> AllNeddedDvdFrameData:

@@ -116,7 +116,7 @@ IndexFileType = Union[D2VIndexFileInfo, DGIndexFileInfo]
 
 @dataclass
 class AllNeddedDvdFrameData:
-    vobids: list[int]
+    vobids: list[tuple[int, int]]
     tff: list[int]
     rff: list[int]
     prog: list[int]

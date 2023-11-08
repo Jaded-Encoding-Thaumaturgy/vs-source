@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Callable, Iterator, Sequence, SupportsIndex, o
 from vstools import CustomValueError, FuncExceptT, T, get_prop, set_output, to_arr, vs, vs_object
 
 from ...utils import debug_print
-from .utils import PCR_CLOCK, PTS_SYNC, absolute_time_from_timecode
+from .utils import PCR_CLOCK, AC3_FRAME_LENGTH, absolute_time_from_timecode
 
 if TYPE_CHECKING:
     from .IsoFileCore import IsoFileCore
@@ -97,7 +97,7 @@ class TitleAudios(vs_object, list[vs.AudioNode]):
         asd = self.title._audios[i]
 
         anode: vs.AudioNode
-        args = (self.title._core.iso_path, self.title._vts, i, self.title._dvdsrc_ranges)
+        args = (str(self.title._core.iso_path), self.title._vts, i, self.title._dvdsrc_ranges)
         if asd.startswith("ac3"):
             anode = vs.core.dvdsrc2.FullVtsAc3(*args)
         elif asd.startswith("lpcm"):
@@ -251,7 +251,7 @@ class Title:
         if not self._audios[audio_i].startswith("ac3"):
             raise CustomValueError(f"Autio at {audio_i} is not ac3", self.dump_ac3)
 
-        nd = vs.core.dvdsrc2.RawAc3(self._core.iso_path, self._vts, audio_i, self._dvdsrc_ranges)
+        nd = vs.core.dvdsrc2.RawAc3(str(self._core.iso_path), self._vts, audio_i, self._dvdsrc_ranges)
         p0 = nd.get_frame(0).props
 
         if not only_calc_delay:
@@ -295,7 +295,7 @@ class Title:
 class SplitHelper:
     @staticmethod
     def split_range_ac3(title: Title, f: int, t: int, audio_i: int, outfile: str) -> float:
-        nd = vs.core.dvdsrc2.RawAc3(title._core.iso_path, title._vts, audio_i, title._dvdsrc_ranges)
+        nd = vs.core.dvdsrc2.RawAc3(str(title._core.iso_path), title._vts, audio_i, title._dvdsrc_ranges)
         prps = nd.get_frame(0).props
 
         start, end = (get_prop(prps, f'Stuff_{x}_PTS', int) for x in ('Start', 'End'))
@@ -313,13 +313,13 @@ class SplitHelper:
         with open(outfile, 'wb') as outf:
             debug_print(f'start_pts  {start_pts} end_pts {end_pts}')
 
-            start = int(start_pts / PTS_SYNC)
+            start = int(start_pts / AC3_FRAME_LENGTH)
 
             debug_print("first ", start, len(nd))
 
             for i in range(start, len(nd)):
-                pkt_start_pts = i * PTS_SYNC
-                pkt_end_pts = (i + 1) * PTS_SYNC
+                pkt_start_pts = i * AC3_FRAME_LENGTH
+                pkt_end_pts = (i + 1) * AC3_FRAME_LENGTH
 
                 assert pkt_end_pts > start_pts
 
@@ -331,7 +331,7 @@ class SplitHelper:
                 if pkt_end_pts > end_pts:
                     break
 
-        debug_print("wrote", (i - (start_pts // PTS_SYNC)))
+        debug_print("wrote", (i - (start_pts // AC3_FRAME_LENGTH)))
         debug_print("offset is", (audio_offset_pts) / 90, "ms")
 
         return audio_offset_pts / PCR_CLOCK

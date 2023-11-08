@@ -67,7 +67,8 @@ def apply_rff_video(
             if current_rff:
                 cnt += 1 + int(current_tff)
 
-            fields += [{'n': 2 * i, 'tf': 1, 'prg': True, 'repeat': False}, {'n': 2 * i + 1, 'tf': 0, 'prg': True, 'repeat': False}] * cnt
+            fields += [{'n': 2 * i, 'tf': 1, 'prg': True, 'repeat': False},
+                       {'n': 2 * i + 1, 'tf': 0, 'prg': True, 'repeat': False}] * cnt
 
     # TODO: mark known progressive frames as progressive
 
