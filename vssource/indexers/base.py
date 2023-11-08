@@ -7,7 +7,7 @@ import tempfile
 from abc import ABC, abstractmethod
 from hashlib import md5
 from os import name as os_name
-from typing import Any, Callable, ClassVar, Iterable, Literal, Protocol, Sequence
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterable, Literal, Protocol, Sequence
 
 from vstools import (
     MISSING, ChromaLocationT, ColorRangeT, CustomRuntimeError, DataType, FieldBasedT, MatrixT, MissingT, PrimariesT,
@@ -16,8 +16,13 @@ from vstools import (
 
 from ..dataclasses import IndexFileType
 
+if TYPE_CHECKING:
+    from ..formats.dvd.parsedvd import IFOX, IFO0Title
+
+
 __all__ = [
     'Indexer', 'ExternalIndexer',
+    'DVDIndexer', 'DVDExtIndexer',
 
     'VSSourceFunc'
 ]
@@ -270,3 +275,17 @@ class ExternalIndexer(Indexer):
             (self.source_func(idx_filename.to_str(), **kwargs) for idx_filename in index_files),
             bits, matrix, transfer, primaries, chroma_location, color_range, field_based
         )
+
+
+class DVDIndexer:
+    iso_path: SPath
+
+    def parse_vts(
+        self, title: IFO0Title, disable_rff: bool, vobidcellids_to_take: list[tuple[int, int]],
+        target_vts: IFOX, output_folder: SPath, vob_input_files: Sequence[SPath]
+    ) -> tuple[vs.VideoNode, list[int], list[tuple[int, int]], list[int]]:
+        raise NotImplementedError
+
+
+class DVDExtIndexer(ExternalIndexer, DVDIndexer):
+    ...

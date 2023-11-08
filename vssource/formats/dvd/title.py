@@ -242,11 +242,8 @@ class Title:
                         set_output(audio, f'split {i} - {j}')
 
     def _assert_dvdsrc2(self, func: FuncExceptT) -> None:
-        if self._dvdsrc_ranges is None or len(self._dvdsrc_ranges) == 0:
-            raise CustomValueError("Title needts to be opened with dvdsrc2!", func)
-
-        if not self._core.use_dvdsrc:
-            raise CustomValueError("This feature requires dvdsrc2!", func)
+        if not self._dvdsrc_ranges:
+            raise CustomValueError("Title needs to be opened with dvdsrc2!", func)
 
     def dump_ac3(self, a: str, audio_i: int = 0, only_calc_delay: bool = False) -> float:
         self._assert_dvdsrc2(self.dump_ac3)

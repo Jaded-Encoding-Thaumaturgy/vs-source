@@ -5,12 +5,9 @@ from typing import Sequence, SupportsFloat
 
 from vstools import SupportsString
 
-from .parsedvd import IFOX
-
 __all__ = [
     'double_check_dvdnav',
     'absolute_time_from_timecode',
-    'get_sectorranges_for_vobcellpair',
 
     'PTS_SYNC', 'PCR_CLOCK'
 ]
@@ -42,11 +39,3 @@ def absolute_time_from_timecode(timecodes: Sequence[SupportsFloat]) -> list[floa
         absolutetime.append(absolutetime[i] + float(a))
 
     return absolutetime
-
-
-def get_sectorranges_for_vobcellpair(current_vts: IFOX, pair_id: tuple[int, int]) -> list[tuple[int, int]]:
-    return [
-        (e.start_sector, e.last_sector)
-        for e in current_vts.vts_c_adt.cell_adr_table
-        if (e.vob_id, e.cell_id) == pair_id
-    ]
