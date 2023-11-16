@@ -2,160 +2,151 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from enum import IntEnum
-from pprint import pformat
 
-from vstools import Region
-
-from .sector import Sector, SectorOffset
+from .sector import SectorReadHelper
+from .timespan import TimeSpan
 
 __all__ = [
-    'VTSPGCI', 'ProgramChain', 'PlaybackTime', 'PGCOffset', 'VTS_FRAMERATE'
+    'CellPlayback',
+    'CellPosition',
+    'AudioControl',
+    'PGC',
+    'VTSPgci',
+    'BLOCK_MODE_FIRST_CELL',
+    'BLOCK_MODE_IN_BLOCK',
+    'BLOCK_MODE_LAST_CELL',
 ]
 
-
-class PGCOffset(IntEnum):
-    """http://dvd.sourceforge.net/dvdinfo/pgc.html"""
-
-    # 0x0000
-    NB_PROGRAMS = 0x0002
-    NB_CELLS = 0x0003
-    PLAYBACK_TIME = 0x0004
-    UOPS = 0x0008
-    PGC_AST_CTL = 0x000C
-    PGC_SPST_CTL = 0x001C
-    NEXT_PGCN = 0x009C
-    PREVIOUS_PGCN = 0x009E
-    GOUP_PGCN = 0x00A0
-    PGC_STILL_TIME = 0x00A2
-    PG_PLAYBACK_MODE = 0x00A3
-    PALETTE = 0x00A4
-
-    COMMANDS_OFFSET = 0x00E4
-    PROGRAM_MAP_OFFSET = 0x00E6
-    CELL_PLAYBACK_INFO_TABLE_OFFSET = 0x00E8
-    CELL_POS_INFO_TABLE_OFFSET = 0x00EA
+BLOCK_MODE_FIRST_CELL = 1
+BLOCK_MODE_IN_BLOCK = 2
+BLOCK_MODE_LAST_CELL = 3
 
 
 @dataclass
-class PlaybackTime:
-    fps: int
-    hours: int
-    minutes: int
-    seconds: int
-    frames: int
-
-    def __repr__(self) -> str:
-        return pformat(vars(self), sort_dicts=False)
+class CellPlayback:
+    interleaved: bool
+    seamless_play: bool
+    seamless_angle: bool
+    block_mode: int
+    block_type: int
+    playback_time: TimeSpan
+    first_sector: int
+    last_sector: int
+    first_ilvu_end_sector: int
+    last_vobu_start_sector: int
 
 
 @dataclass
-class ProgramChain:
-    duration: PlaybackTime
-    nb_program: int
-    playback_times: list[PlaybackTime]
-
-    def __repr__(self) -> str:
-        return pformat(vars(self), sort_dicts=False)
+class CellPosition:
+    cell_nr: int
+    vob_id_nr: int
 
 
-class VTSPGCI(Sector):
-    nb_program_chains: int
-    program_chains: list[ProgramChain]
+@dataclass
+class AudioControl:
+    available: bool
+    number: int
 
-    chain_offset: int
 
-    def _load(self) -> None:
-        self.ifo.seek(SectorOffset.SECTOR_POINTER_VTS_PGCI, os.SEEK_SET)
-        offset, = self._unpack_byte(4)
+@dataclass
+class PGC:
+    program_map: list[int]
+    cell_playback: list[CellPlayback]
+    cell_position: list[CellPosition]
 
-        self.ifo.seek(2048 * offset + 0x01, os.SEEK_SET)
-        self.nb_program_chains, = self._unpack_byte(1)
+    nr_of_cells: int
+    nr_of_programs: int
+    next_pgc_nr: int
+    prev_pgc_nr: int
+    goup_pgc_nr: int
+    audio_control: list[AudioControl]
 
-        pcgit_pos = offset * 0x800
 
-        self.ifo.seek(SectorOffset.SECTOR_POINTER_VTS_PGCI, os.SEEK_SET)
+@dataclass
+class VTSPgci:
+    def __init__(self, reader: SectorReadHelper):
+        reader._goto_sector_ptr(0x00CC)
 
-        self.program_chains = []
+        posn = reader.ifo.tell()
 
-        for nbpgc in range(self.nb_program_chains):
-            self.ifo.seek(pcgit_pos + (8 * (nbpgc + 1)) + 4, os.SEEK_SET)
-            self.chain_offset, = self._unpack_byte(4)
+        nr_pgcs, *_ = reader._unpack_byte(2, 2, 4)
 
-            offset = pcgit_pos + self.chain_offset
+        self.pgcs = list[PGC]()
 
-            self.ifo.seek(offset + PGCOffset.NB_PROGRAMS, os.SEEK_SET)
-            nb_program, = self._unpack_byte(1)
+        for _ in range(nr_pgcs):
+            _, offset = reader._unpack_byte(4, 4)
+            bk = reader.ifo.tell()
 
-            self.ifo.seek(offset + PGCOffset.NB_CELLS, os.SEEK_SET)
-            nb_cells, = self._unpack_byte(1)
+            audio_control = list[AudioControl]()
 
-            self.ifo.seek(offset + PGCOffset.PLAYBACK_TIME, os.SEEK_SET)
-            duration = self._get_timespan(self.ifo.read(4))
+            pgc_base = posn + offset
 
-            self.ifo.seek(offset + PGCOffset.PROGRAM_MAP_OFFSET, os.SEEK_SET)
-            program_map_offset, = self._unpack_byte(2)
+            reader.ifo.seek(pgc_base, os.SEEK_SET)
 
-            self.ifo.seek(offset + PGCOffset.CELL_PLAYBACK_INFO_TABLE_OFFSET, os.SEEK_SET)
-            cell_table_offset, = self._unpack_byte(2)
+            _, num_programs, num_cells = reader._unpack_byte(2, 1, 1)
+            reader._unpack_byte(4, 4)
 
-            playback_times: list[PlaybackTime] = []
+            for _ in range(8):
+                ac, _ = reader._unpack_byte(1, 1)
 
-            for program in range(nb_program):
-                self.ifo.seek(offset + program_map_offset + program, os.SEEK_SET)
-                entry_cell, = self._unpack_byte(1)
+                available = (ac & 0x80) != 0
+                number = ac & 7
 
-                exit_cell = entry_cell
+                audio_control.append(AudioControl(available=available, number=number))
 
-                if program < nb_program - 1:
-                    self.ifo.seek(offset + program_map_offset + program + 0x01, os.SEEK_SET)
-                    exit_cell, = self._unpack_byte(1)
-                    exit_cell -= 1
-                else:
-                    exit_cell = nb_cells
+            reader._unpack_byte(4, repeat=32)
 
-                for cell in range(entry_cell, exit_cell + 1):
-                    cell_start = cell_table_offset + (cell - 1) * 0x18
+            next_pgcn, prev_pgcn, group_pgcn = reader._unpack_byte(2, 2, 2)
 
-                    self.ifo.seek(offset + cell_start, os.SEEK_SET)
-                    cell_type = self.ifo.read(4)[0] >> 6
+            reader._unpack_byte(1, 1)
 
-                    if cell_type in {0x02, 0x03} and os.environ.get('VSSOURCE_DEBUG', False):
-                        print('found different angle block:', cell_type)
+            reader._unpack_byte(4, repeat=16)
 
-                    self.ifo.seek(offset + cell_start + 0x0004, os.SEEK_SET)
-                    playback_time = self._get_timespan(self.ifo.read(4))
+            _, offset_program, offset_playback, offset_position = reader._unpack_byte(2, 2, 2, 2)
 
-                    playback_times.append(playback_time)
+            reader.ifo.seek(pgc_base + offset_program, os.SEEK_SET)
 
-            self.program_chains.append(
-                ProgramChain(duration, nb_program, playback_times)
+            program_map = list(reader._unpack_byte(1, repeat=num_programs))
+
+            reader.ifo.seek(pgc_base + offset_position, os.SEEK_SET)
+
+            cell_position_bytes = [reader._unpack_byte(2, 1, 1) for _ in range(num_cells)]
+            cell_position = [CellPosition(cell_nr=a[2], vob_id_nr=a[0]) for a in cell_position_bytes]
+
+            reader.ifo.seek(pgc_base + offset_playback, os.SEEK_SET)
+
+            cell_playback_bytes = [
+                reader._unpack_byte(1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4)
+                for _ in range(num_cells)
+            ]
+
+            cell_playback = [
+                CellPlayback(
+                    interleaved=(a[0] & 0b100) != 0,
+                    seamless_play=(a[0] & 0b1000) != 0,
+                    seamless_angle=(a[0] & 0b1) != 0,
+                    block_mode=((a[0] & 0b11000000) >> 6),
+                    block_type=((a[0] & 0b00110000) >> 4),
+                    playback_time=TimeSpan(*a[4:8]),
+                    first_sector=a[5 + 3],
+                    last_sector=a[8 + 3],
+                    first_ilvu_end_sector=a[6 + 3],
+                    last_vobu_start_sector=a[7 + 3],
+                ) for a in cell_playback_bytes
+            ]
+
+            reader.ifo.seek(bk, os.SEEK_SET)
+
+            self.pgcs.append(
+                PGC(
+                    nr_of_cells=num_cells,
+                    nr_of_programs=num_programs,
+                    next_pgc_nr=next_pgcn,
+                    prev_pgc_nr=prev_pgcn,
+                    goup_pgc_nr=group_pgcn,
+                    program_map=program_map,
+                    cell_position=cell_position,
+                    cell_playback=cell_playback,
+                    audio_control=audio_control
+                )
             )
-
-    def _get_timespan(self, data: bytes) -> PlaybackTime:
-        frames = self._get_frames(data[3])
-        fps = data[3] >> 6
-
-        if fps not in VTS_FRAMERATE:
-            raise ValueError
-
-        hours, minutes, seconds = [self._bcd_to_int(data[i]) for i in range(3)]
-
-        return PlaybackTime(fps, hours, minutes, seconds, frames)
-
-    def _get_frames(self, byte: int) -> int:
-        if ((byte >> 6) & 0x01) == 1:
-            frames = self._bcd_to_int(byte & 0x3F)
-        else:
-            raise ValueError
-        return frames
-
-    @staticmethod
-    def _bcd_to_int(bcd: int) -> int:
-        return ((0xFF & (bcd >> 4)) * 10) + (bcd & 0x0F)
-
-
-VTS_FRAMERATE = {
-    0x01: Region.PAL.framerate,
-    0x03: Region.NTSC.framerate
-}

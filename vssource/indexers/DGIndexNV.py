@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from fractions import Fraction
-from functools import lru_cache, reduce
 import os
+from fractions import Fraction
+from functools import lru_cache
 from typing import Sequence
 
 from vstools import SPath, core
 
-from ..dataclasses import DGIndexFileInfo, DGIndexFooter, DGIndexFrameData, DGIndexHeader, IndexFileVideo
+from ..dataclasses import DGIndexFileInfo, DGIndexFooter, DGIndexFrameData, DGIndexHeader
 from ..utils import opt_int, opt_ints
 from .base import ExternalIndexer
 
@@ -35,7 +35,7 @@ class DGIndexNV(ExternalIndexer):
 
         str_filepaths = list(map(str, filepaths))
 
-        if "DGIndexNV" not in lines[0]:
+        if 'DGIndexNV' not in lines[0]:
             self.file_corrupted(index_path)
 
         start_videos = lines.index('') + 1
@@ -70,7 +70,7 @@ class DGIndexNV(ExternalIndexer):
 
         head, lines = self._split_lines(lines)
 
-        if "DGIndexNV" not in head[0]:
+        if 'DGIndexNV' not in head[0]:
             self.file_corrupted(index_path)
 
         vid_lines, lines = self._split_lines(lines)
@@ -111,14 +111,11 @@ class DGIndexNV(ExternalIndexer):
             elif key == 'VPID':
                 header.vpid = int(values[0])
 
-        videos = [
-            IndexFileVideo(SPath(' '.join(line[:-1])), int(line[-1]), 0)  # TODO
-            for line in [line.split(' ') for line in vid_lines]
-        ]
+        video_sizes = [int(line[-1]) for line in [line.split(' ') for line in vid_lines]]
 
-        max_sector = reduce(lambda a, b: a + b, [v.size for v in videos[:file_idx + 1]], 0)
+        max_sector = sum([0, *video_sizes[:file_idx + 1]])
 
-        idx_file_sector = [max_sector - videos[file_idx].size, max_sector]
+        idx_file_sector = [max_sector - video_sizes[file_idx], max_sector]
 
         curr_SEQ, frame_data = 0, []
 
@@ -167,4 +164,4 @@ class DGIndexNV(ExternalIndexer):
 
                     footer[key] = value
 
-        return DGIndexFileInfo(index_path, file_idx, videos, header, frame_data, footer)
+        return DGIndexFileInfo(index_path, file_idx, header, frame_data, footer)

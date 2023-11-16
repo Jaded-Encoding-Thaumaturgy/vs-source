@@ -1,15 +1,27 @@
 from __future__ import annotations
 
+import os
 import re
-from typing import Sequence
+from typing import Any, Sequence
 
-from vstools import SPath
+from vstools import SPath, copy_signature
 
 __all__ = [
+    'debug_print',
+
     'opt_int', 'opt_ints',
 
     'get_all_vobs'
 ]
+
+
+DVD_DEBUG = 'DVD_DEBUG' in os.environ
+
+
+@copy_signature(print)
+def debug_print(*args: Any, **kwargs: Any) -> None:
+    if DVD_DEBUG:
+        print(*args, **kwargs)
 
 
 def opt_int(val: str | int | None) -> int | None:
@@ -24,7 +36,7 @@ def get_all_vobs(*files: SPath) -> list[SPath]:
     found_files = list[SPath]()
 
     for file in list(files):
-        if matches := re.search(r"VTS_([0-9]{2})_([0-9])\.VOB", file.name, re.IGNORECASE):
+        if matches := re.search(r'VTS_([0-9]{2})_([0-9])\.VOB', file.name, re.IGNORECASE):
             found_files += file.get_folder().glob(
                 f'[vV][tT][sS]_[{matches[1][0]}-9][{matches[1][1]}-9]_[{matches[2]}-9].[vV][oO][bB]'
             )

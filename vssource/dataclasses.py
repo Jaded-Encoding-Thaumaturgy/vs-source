@@ -2,9 +2,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from fractions import Fraction
-from typing import NamedTuple, Union
+from typing import Union
 
 from vstools import SPath
+
+__all__ = [
+    'IndexFileFrameData',
+    'IndexFileInfo',
+
+    'D2VIndexHeader',
+    'D2VIndexFrameData',
+
+    'DGIndexHeader',
+    'DGIndexFrameData',
+    'DGIndexFooter',
+
+    'D2VIndexFileInfo',
+    'DGIndexFileInfo',
+
+    'AllNeddedDvdFrameData'
+]
 
 
 class _SetItemMeta:
@@ -12,31 +29,16 @@ class _SetItemMeta:
         return self.__setattr__(key, value)
 
 
-class IFOFileInfo(NamedTuple):
-    chapters: list[list[int]]
-    fps: Fraction
-    is_multiple_IFOs: bool
-
-
-class IndexFileVideo(NamedTuple):
-    path: SPath
-    size: int
-    num_frames: int
-
-
 @dataclass
 class IndexFileFrameData(_SetItemMeta):
     matrix: int
     pic_type: str
-    vob: int | None
-    cell: int | None
 
 
 @dataclass
 class _IndexFileInfoBase(_SetItemMeta):
     path: SPath
     file_idx: int
-    videos: list[IndexFileVideo]
 
 
 @dataclass
@@ -61,9 +63,12 @@ class D2VIndexHeader(_SetItemMeta):
 
 @dataclass
 class D2VIndexFrameData(IndexFileFrameData):
-    info: str
+    vob: int
+    cell: int
+    info: int
     skip: int
     position: int
+    frameflags: list[int]
 
 
 @dataclass
@@ -81,7 +86,8 @@ class DGIndexHeader(_SetItemMeta):
 
 @dataclass
 class DGIndexFrameData(IndexFileFrameData):
-    pass
+    vob: int | None
+    cell: int | None
 
 
 @dataclass
@@ -106,3 +112,12 @@ class DGIndexFileInfo(_IndexFileInfoBase):
 
 
 IndexFileType = Union[D2VIndexFileInfo, DGIndexFileInfo]
+
+
+@dataclass
+class AllNeddedDvdFrameData:
+    vobids: list[tuple[int, int]]
+    tff: list[int]
+    rff: list[int]
+    prog: list[int]
+    progseq: list[int]

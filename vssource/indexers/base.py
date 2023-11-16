@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import tempfile
 from abc import ABC, abstractmethod
 from hashlib import md5
 from os import name as os_name
-from typing import Any, Callable, ClassVar, Iterable, Literal, Protocol, Sequence
+from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterable, Literal, Protocol, Sequence
 
 from vstools import (
     MISSING, ChromaLocationT, ColorRangeT, CustomRuntimeError, DataType, FieldBasedT, MatrixT, MissingT, PrimariesT,
@@ -15,8 +16,13 @@ from vstools import (
 
 from ..dataclasses import IndexFileType
 
+if TYPE_CHECKING:
+    from ..formats.dvd.parsedvd import IFOX, IFO0Title
+
+
 __all__ = [
     'Indexer', 'ExternalIndexer',
+    'DVDIndexer', 'DVDExtIndexer',
 
     'VSSourceFunc'
 ]
@@ -55,8 +61,8 @@ class Indexer(ABC):
         return md5(to_hash).hexdigest()
 
     @classmethod
-    def source_func(self, path: DataType | SPathLike, *args: Any, **kwargs: Any) -> vs.VideoNode:
-        return self._source_func(str(path), *args, **kwargs)
+    def source_func(cls, path: DataType | SPathLike, *args: Any, **kwargs: Any) -> vs.VideoNode:
+        return cls._source_func(str(path), *args, **kwargs)
 
     @classmethod
     def normalize_filenames(cls, file: SPathLike | Sequence[SPathLike]) -> list[SPath]:
@@ -155,8 +161,8 @@ class ExternalIndexer(Indexer):
         output.mkdirp()
 
         proc = subprocess.Popen(
-            list(map(str, self.get_cmd(files, output) + list(cmd_args) + list(self._default_args))),
-            text=True, encoding='utf-8', shell=True, cwd=output.get_folder().to_str()
+            list(map(str, (*self.get_cmd(files, output), *cmd_args, *self._default_args))),
+            text=True, encoding='utf-8', shell=os_name == 'nt', cwd=output.get_folder().to_str()
         )
 
         status = proc.wait()
@@ -230,7 +236,6 @@ class ExternalIndexer(Indexer):
                     output.unlink()
                 else:
                     return self.update_video_filenames(output, files)
-
             return self._run_index(files, output, cmd_args)
 
         if not split_files:
@@ -247,7 +252,9 @@ class ExternalIndexer(Indexer):
 
     def get_video_idx_path(self, folder: SPath, file_hash: str, video_name: SPathLike) -> SPath:
         vid_name = SPath(video_name).stem
-        filename = '_'.join([file_hash, vid_name])
+        current_indxer = os.path.basename(self._bin_path)
+        filename = '_'.join([file_hash, vid_name, current_indxer])
+
         return self.get_idx_file_path(folder / self.index_folder_name / filename)
 
     @inject_self
@@ -268,3 +275,17 @@ class ExternalIndexer(Indexer):
             (self.source_func(idx_filename.to_str(), **kwargs) for idx_filename in index_files),
             bits, matrix, transfer, primaries, chroma_location, color_range, field_based
         )
+
+
+class DVDIndexer:
+    iso_path: SPath
+
+    def parse_vts(
+        self, title: IFO0Title, disable_rff: bool, vobidcellids_to_take: list[tuple[int, int]],
+        target_vts: IFOX, output_folder: SPath, vob_input_files: Sequence[SPath]
+    ) -> tuple[vs.VideoNode, list[int], list[tuple[int, int]], list[int]]:
+        raise NotImplementedError
+
+
+class DVDExtIndexer(ExternalIndexer, DVDIndexer):
+    ...

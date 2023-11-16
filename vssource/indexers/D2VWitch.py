@@ -1,23 +1,25 @@
 from __future__ import annotations
 
 import re
-import tempfile
 from fractions import Fraction
-from functools import lru_cache
+from functools import lru_cache, partial
+from typing import TYPE_CHECKING, Sequence
 
-from vstools import SPath, core
+from vstools import CustomValueError, SPath, core, remap_frames, vs
 
-from ..dataclasses import D2VIndexFileInfo, D2VIndexFrameData, D2VIndexHeader, IndexFileVideo
-from .base import ExternalIndexer
+from ..dataclasses import D2VIndexFileInfo, D2VIndexFrameData, D2VIndexHeader
+from ..rff import apply_rff_array, apply_rff_video, cut_array_on_ranges
+from .base import DVDExtIndexer
+
+if TYPE_CHECKING:
+    from ..formats.dvd.parsedvd import IFOX, IFO0Title
 
 __all__ = [
     'D2VWitch'
 ]
 
 
-class D2VWitch(ExternalIndexer):
-    frame_lengths_key = "FilesFrameLengths"
-
+class D2VWitch(DVDExtIndexer):
     _bin_path = 'd2vwitch'
     _ext = 'd2v'
     _source_func = core.lazy.d2v.Source
@@ -35,7 +37,7 @@ class D2VWitch(ExternalIndexer):
 
         str_filepaths = list(map(str, filepaths))
 
-        if "DGIndex" not in lines[0]:
+        if 'DGIndex' not in lines[0]:
             self.file_corrupted(index_path)
 
         if not (n_files := int(lines[1])) or n_files != len(str_filepaths):
@@ -51,48 +53,6 @@ class D2VWitch(ExternalIndexer):
         with open(index_path, 'w') as file:
             file.write('\n'.join(lines))
 
-    def write_idx_file_videoslength(self, index_path: SPath) -> list[int]:
-        with open(index_path, 'r') as f:
-            file_content = f.read()
-
-        lines = file_content.split('\n')
-
-        prev_lines, lines = lines[:2], lines[2:]
-
-        if "DGIndex" not in prev_lines[0]:
-            self.file_corrupted(index_path)
-
-        vid_lines, lines = self._split_lines(lines)
-        prev_lines += vid_lines + ['']
-
-        vids_frame_lenghts = []
-
-        for path in map(SPath, vid_lines):
-            temp_idx_files = self.index([path], True, False, tempfile.gettempdir())[0].to_str()
-
-            if path.to_str().lower().endswith('_0.vob'):
-                with open(temp_idx_files, 'r') as f:
-                    idx_file_content = f.read()
-
-                if len(idx_file_content.splitlines()) < 20:
-                    vids_frame_lenghts += [1]
-                    continue
-
-            vid_file = self.source_func(temp_idx_files)
-
-            vids_frame_lenghts += [vid_file.num_frames]
-
-        raw_header, lines = self._split_lines(lines)
-
-        raw_header = [line for line in raw_header if self.frame_lengths_key not in line]
-
-        raw_header += [f"{self.frame_lengths_key}={','.join(map(str, vids_frame_lenghts))}", '']
-
-        with open(index_path, 'w') as file:
-            file.write('\n'.join(prev_lines + raw_header + lines))
-
-        return vids_frame_lenghts
-
     @lru_cache
     def get_info(self, index_path: SPath, file_idx: int = -1) -> D2VIndexFileInfo:
         with open(index_path, 'r') as f:
@@ -102,13 +62,10 @@ class D2VWitch(ExternalIndexer):
 
         head, lines = lines[:2], lines[2:]
 
-        if "DGIndex" not in head[0]:
+        if 'DGIndex' not in head[0]:
             self.file_corrupted(index_path)
 
-        vid_lines, lines = self._split_lines(lines)
-        raw_header, lines = self._split_lines(lines)
-
-        video_frame_lenghts = []
+        raw_header, lines = self._split_lines(self._split_lines(lines)[1])
 
         header = D2VIndexHeader()
 
@@ -138,22 +95,12 @@ class D2VWitch(ExternalIndexer):
             elif key == 'FIELD_OPERATION':
                 header.field_op = int(values[0])
             elif key == 'FRAME_RATE':
-                if matches := re.search(r".*\((\d+\/\d+)", values[0]):
+                if matches := re.search(r'.*\((\d+\/\d+)', values[0]):
                     header.frame_rate = Fraction(matches.group(1))
             elif key == 'LOCATION':
-                header.location = list(map(int, values))
-            elif key == self.frame_lengths_key.upper():
-                video_frame_lenghts = list(map(int, values))
+                header.location = list(map(partial(int, base=16), values))
 
-        if len(video_frame_lenghts) != len(vid_lines):
-            video_frame_lenghts = self.write_idx_file_videoslength(index_path)
-
-        videos = [
-            IndexFileVideo(path, path.stat().st_size, vidlen)
-            for path, vidlen in zip(map(SPath, vid_lines), video_frame_lenghts)
-        ]
-
-        frame_data = []
+        frame_data = list[D2VIndexFrameData]()
 
         if file_idx >= 0:
             for rawline in lines:
@@ -171,8 +118,104 @@ class D2VWitch(ExternalIndexer):
 
                 frame_data.append(D2VIndexFrameData(
                     int(line[1]), 'I', int(line[5]),
-                    int(line[6]), bin(int(line[0], 16))[2:].zfill(8),
-                    int(line[4]), int(line[3])
+                    int(line[6]), int(line[0], 16),
+                    int(line[4]), int(line[3]),
+                    list(int(a, 16) for a in line[7:])
+                ))
+        elif file_idx == -1:
+            for rawline in lines:
+                if len(rawline) == 0:
+                    break
+
+                line = rawline.split(" ")
+
+                frame_data.append(D2VIndexFrameData(
+                    int(line[1]), 'I', int(line[5]),
+                    int(line[6]), int(line[0], 16),
+                    int(line[4]), int(line[3]),
+                    list(int(a, 16) for a in line[7:])
                 ))
 
-        return D2VIndexFileInfo(index_path, file_idx, videos, header, frame_data)
+        return D2VIndexFileInfo(index_path, file_idx, header, frame_data)
+
+    def parse_vts(
+        self, title: IFO0Title, disable_rff: bool, vobidcellids_to_take: list[tuple[int, int]],
+        target_vts: IFOX, output_folder: SPath, vob_input_files: Sequence[SPath]
+    ) -> tuple[vs.VideoNode, list[int], list[tuple[int, int]], list[int]]:
+        dvddd = self._d2v_vobid_frameset(vob_input_files, output_folder)
+
+        if len(dvddd.keys()) == 1 and (0, 0) in dvddd.keys():
+            raise CustomValueError(
+                'Youre indexer created a d2v file with only zeros for vobid cellid; '
+                'This usually means outdated/unpatched D2Vwitch', self.parse_vts
+            )
+
+        frameranges = [x for y in [dvddd[a] for a in vobidcellids_to_take] for x in y]
+
+        fflags, vobids, progseq = self._d2v_collect_all_frameflags(vob_input_files, output_folder)
+
+        index_file = self.index(vob_input_files, output_folder=output_folder)[0]
+        node = self._source_func(index_file, rff=False)  # type: ignore
+
+        assert len(node) == len(fflags) == len(vobids) == len(progseq)
+
+        progseq = cut_array_on_ranges(progseq, frameranges)
+        fflags = cut_array_on_ranges(fflags, frameranges)
+        vobids = cut_array_on_ranges(vobids, frameranges)
+        node = remap_frames(node, frameranges)
+
+        rff = [(a & 1) for a in fflags]
+
+        if not disable_rff:
+            tff = [int((a & 2) >> 1) for a in fflags]
+            prog = [int((a & 0b01000000) != 0) for a in fflags]
+
+            node = apply_rff_video(node, rff, tff, prog, progseq)
+            vobids = apply_rff_array(vobids, rff, tff, progseq)
+
+        return node, rff, vobids, []
+
+    def _d2v_collect_all_frameflags(
+        self, files: Sequence[SPath], output_folder: SPath
+    ) -> tuple[list[int], list[tuple[int, int]], list[int]]:
+        index_file = self.index(files, output_folder=output_folder)[0]
+        index_info = self.get_info(index_file)
+
+        frameflagslst = list[int]()
+        vobidlst = list[tuple[int, int]]()
+        progseqlst = list[int]()
+
+        for iframe in index_info.frame_data:
+            assert isinstance(iframe, D2VIndexFrameData)
+
+            vobcell = (iframe.vob, iframe.cell)
+
+            progseq = int((iframe.info & 0b1000000000) != 0)
+
+            for a in iframe.frameflags:
+                if a != 0xFF:
+                    frameflagslst.append(a)
+                    vobidlst.append(vobcell)
+                    progseqlst.append(progseq)
+
+        return frameflagslst, vobidlst, progseqlst
+
+    def _d2v_vobid_frameset(
+        self, files: Sequence[SPath], output_folder: SPath
+    ) -> dict[tuple[int, int], list[tuple[int, int]]]:
+        _, vobids, _ = self._d2v_collect_all_frameflags(files, output_folder)
+
+        vobidset = dict[tuple[int, int], list[tuple[int, int]]]()
+        for i, a in enumerate(vobids):
+            if a not in vobidset:
+                vobidset[a] = [(i, i - 1)]
+
+            last = vobidset[a][-1]
+
+            if last[1] + 1 == i:
+                vobidset[a][-1] = (last[0], last[1] + 1)
+                continue
+
+            vobidset[a].append((i, i))
+
+        return vobidset
