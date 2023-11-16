@@ -32,20 +32,22 @@ class DVDSRCIndexer(DVDIndexer):
     ) -> tuple[vs.VideoNode, list[int], list[tuple[int, int]], list[int]]:
         admap = target_vts.vts_vobu_admap
 
-        all_ranges = []
+        all_ranges = [
+            x for a in vobidcellids_to_take for x in get_sectorranges_for_vobcellpair(target_vts, a)
+        ]
 
-        for a in vobidcellids_to_take:
-            all_ranges += get_sectorranges_for_vobcellpair(target_vts, a)
-        idxx = []
+        vts_indices = list[int]()
         for a in all_ranges:
             start_index = admap.index(a[0])
+
             try:
                 end_index = admap.index(a[1] + 1) - 1
             except ValueError:
                 end_index = len(admap) - 1
-            idxx += [start_index, end_index]
 
-        rawnode = core.dvdsrc2.FullVts(str(self.iso_path), vts=title.title_set_nr, ranges=idxx)
+            vts_indices.extend([start_index, end_index])
+
+        rawnode = core.dvdsrc2.FullVts(str(self.iso_path), vts=title.title_set_nr, ranges=vts_indices)
         staff = self._extract_data(rawnode)
 
         if not disable_rff:
@@ -54,10 +56,8 @@ class DVDSRCIndexer(DVDIndexer):
         else:
             rnode = rawnode
             _vobids = staff.vobids
-        vobids = _vobids
-        dvdsrc_ranges = idxx
-        rff = staff.rff
-        return rnode, rff, vobids, dvdsrc_ranges
+
+        return rnode, staff.rff, _vobids, vts_indices
 
     def _extract_data(self, rawnode: vs.VideoNode) -> AllNeddedDvdFrameData:
         dd = bytes(get_prop(rawnode, 'InfoFrame', vs.VideoFrame)[0])  # type: ignore

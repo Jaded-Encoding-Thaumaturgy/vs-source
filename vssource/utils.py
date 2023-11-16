@@ -15,7 +15,7 @@ __all__ = [
 ]
 
 
-DVD_DEBUG = "DVD_DEBUG" in os.environ
+DVD_DEBUG = 'DVD_DEBUG' in os.environ
 
 
 @copy_signature(print)
@@ -36,7 +36,7 @@ def get_all_vobs(*files: SPath) -> list[SPath]:
     found_files = list[SPath]()
 
     for file in list(files):
-        if matches := re.search(r"VTS_([0-9]{2})_([0-9])\.VOB", file.name, re.IGNORECASE):
+        if matches := re.search(r'VTS_([0-9]{2})_([0-9])\.VOB', file.name, re.IGNORECASE):
             found_files += file.get_folder().glob(
                 f'[vV][tT][sS]_[{matches[1][0]}-9][{matches[1][1]}-9]_[{matches[2]}-9].[vV][oO][bB]'
             )

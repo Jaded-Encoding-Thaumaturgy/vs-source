@@ -5,14 +5,9 @@ from dataclasses import dataclass
 from vstools import Region
 
 __all__ = [
-    'bcd_to_int',
     'TimeSpan',
     'VTS_FRAMERATE'
 ]
-
-
-def bcd_to_int(bcd: int) -> int:
-    return ((0xFF & (bcd >> 4)) * 10) + (bcd & 0x0F)
 
 
 @dataclass
@@ -39,9 +34,15 @@ class TimeSpan:
         self.second = seconds
         self.frame_u = frames
 
+    @staticmethod
+    def bcd_to_int(bcd: int) -> int:
+        return ((0xFF & (bcd >> 4)) * 10) + (bcd & 0x0F)
+
     def get_seconds_float(self) -> float:
         # + frames / framerate
-        return float((((bcd_to_int(self.hour) * 60) + bcd_to_int(self.minute)) * 60 + bcd_to_int(self.second)))
+        return float(
+            ((self.bcd_to_int(self.hour) * 60) + self.bcd_to_int(self.minute)) * 60 + self.bcd_to_int(self.second)
+        )
 
 
 VTS_FRAMERATE = {

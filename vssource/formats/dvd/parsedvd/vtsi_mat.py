@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 from .sector import SectorReadHelper
 
 __all__ = [
@@ -32,9 +33,6 @@ class AudioAttr:
 
 @dataclass
 class VTSIMat:
-    vts_video_attr: VTSVideoAttr
-    vts_audio_attr: list[AudioAttr]
-
     def __init__(self, reader: SectorReadHelper):
         vb0, vb1, = reader._seek_unpack_byte(0x0200, 1, 1)
 
@@ -42,9 +40,9 @@ class VTSIMat:
         video_format = (vb0 & 0b00110000) >> 4
         picture_size = (vb1 & 0b00110000) >> 4
 
-        vts_video_attr = VTSVideoAttr(mpeg_version, video_format, picture_size)
+        self.vts_video_attr = VTSVideoAttr(mpeg_version, video_format, picture_size)
+        self.vts_audio_attr = list[AudioAttr]()
 
-        vts_audio_attr = []
         num_audio, = reader._seek_unpack_byte(0x0202, 2)
 
         for _ in range(num_audio):
@@ -56,9 +54,6 @@ class VTSIMat:
             if lang_type:
                 lang = chr(buf[2]) + chr(buf[3])
             else:
-                lang = "xx"
+                lang = 'xx'
 
-            vts_audio_attr += [AudioAttr(audio_format, lang)]
-
-        self.vts_video_attr = vts_video_attr
-        self.vts_audio_attr = vts_audio_attr
+            self.vts_audio_attr.append(AudioAttr(audio_format, lang))

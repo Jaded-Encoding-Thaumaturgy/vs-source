@@ -35,7 +35,7 @@ class DGIndexNV(ExternalIndexer):
 
         str_filepaths = list(map(str, filepaths))
 
-        if "DGIndexNV" not in lines[0]:
+        if 'DGIndexNV' not in lines[0]:
             self.file_corrupted(index_path)
 
         start_videos = lines.index('') + 1
@@ -70,7 +70,7 @@ class DGIndexNV(ExternalIndexer):
 
         head, lines = self._split_lines(lines)
 
-        if "DGIndexNV" not in head[0]:
+        if 'DGIndexNV' not in head[0]:
             self.file_corrupted(index_path)
 
         vid_lines, lines = self._split_lines(lines)

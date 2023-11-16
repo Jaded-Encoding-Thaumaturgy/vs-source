@@ -162,7 +162,7 @@ def source(
 
             indexer, filepath_dgi = DGIndexNV(), SPath(filepath)
 
-            if filepath_dgi.suffix != ".dgi":
+            if filepath_dgi.suffix != '.dgi':
                 filepath_dgi = next(iter(indexer.index([filepath_dgi], False, False)))
 
             idx_info = indexer.get_info(filepath_dgi, 0).footer

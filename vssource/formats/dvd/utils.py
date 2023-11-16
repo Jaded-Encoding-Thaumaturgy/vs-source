@@ -23,7 +23,7 @@ PCR_CLOCK = 90_000
 # https://gist.github.com/jsaowji/2bbf9c776a3226d1272e93bb245f7538
 def double_check_dvdnav(iso: SupportsString, title: int) -> list[float] | None:
     try:
-        ap = subprocess.check_output(["dvdsrc_dvdnav_title_ptt_test", str(iso), str(title)])
+        ap = subprocess.check_output(['dvdsrc_dvdnav_title_ptt_test', str(iso), str(title)])
 
         return list(map(float, ap.splitlines()))
     except FileNotFoundError:

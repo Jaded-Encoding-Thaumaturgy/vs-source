@@ -64,23 +64,25 @@ class PGC:
 
 @dataclass
 class VTSPgci:
-    pgcs: list[PGC]
-
     def __init__(self, reader: SectorReadHelper):
         reader._goto_sector_ptr(0x00CC)
-        posn = reader.ifo.tell()
-        nr_pgcs, res, end = reader._unpack_byte(2, 2, 4)
 
-        pgcs = []
+        posn = reader.ifo.tell()
+
+        nr_pgcs, *_ = reader._unpack_byte(2, 2, 4)
+
+        self.pgcs = list[PGC]()
 
         for _ in range(nr_pgcs):
-            cat, offset = reader._unpack_byte(4, 4)
+            _, offset = reader._unpack_byte(4, 4)
             bk = reader.ifo.tell()
 
-            audio_control = []
+            audio_control = list[AudioControl]()
 
             pgc_base = posn + offset
+
             reader.ifo.seek(pgc_base, os.SEEK_SET)
+
             _, num_programs, num_cells = reader._unpack_byte(2, 1, 1)
             reader._unpack_byte(4, 4)
 
@@ -90,18 +92,17 @@ class VTSPgci:
                 available = (ac & 0x80) != 0
                 number = ac & 7
 
-                audio_control += [AudioControl(available=available, number=number)]
+                audio_control.append(AudioControl(available=available, number=number))
 
-            for _ in range(32):
-                reader._unpack_byte(4)
+            reader._unpack_byte(4, repeat=32)
 
             next_pgcn, prev_pgcn, group_pgcn = reader._unpack_byte(2, 2, 2)
 
-            playback_mode, still_time = reader._unpack_byte(1, 1)
+            reader._unpack_byte(1, 1)
 
             reader._unpack_byte(4, repeat=16)
 
-            offset_commands, offset_program, offset_playback, offset_position = reader._unpack_byte(2, 2, 2, 2)
+            _, offset_program, offset_playback, offset_position = reader._unpack_byte(2, 2, 2, 2)
 
             reader.ifo.seek(pgc_base + offset_program, os.SEEK_SET)
 
@@ -136,15 +137,16 @@ class VTSPgci:
 
             reader.ifo.seek(bk, os.SEEK_SET)
 
-            pgcs += [PGC(
-                nr_of_cells=num_cells,
-                nr_of_programs=num_programs,
-                next_pgc_nr=next_pgcn,
-                prev_pgc_nr=prev_pgcn,
-                goup_pgc_nr=group_pgcn,
-                program_map=program_map,
-                cell_position=cell_position,
-                cell_playback=cell_playback,
-                audio_control=audio_control)]
-
-        self.pgcs = pgcs
+            self.pgcs.append(
+                PGC(
+                    nr_of_cells=num_cells,
+                    nr_of_programs=num_programs,
+                    next_pgc_nr=next_pgcn,
+                    prev_pgc_nr=prev_pgcn,
+                    goup_pgc_nr=group_pgcn,
+                    program_map=program_map,
+                    cell_position=cell_position,
+                    cell_playback=cell_playback,
+                    audio_control=audio_control
+                )
+            )

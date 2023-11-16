@@ -161,8 +161,8 @@ class ExternalIndexer(Indexer):
         output.mkdirp()
 
         proc = subprocess.Popen(
-            list(map(str, self.get_cmd(files, output) + list(cmd_args) + list(self._default_args))),
-            text=True, encoding='utf-8', shell=os_name == "nt", cwd=output.get_folder().to_str()
+            list(map(str, (*self.get_cmd(files, output), *cmd_args, *self._default_args))),
+            text=True, encoding='utf-8', shell=os_name == 'nt', cwd=output.get_folder().to_str()
         )
 
         status = proc.wait()
@@ -251,10 +251,10 @@ class ExternalIndexer(Indexer):
         return outputs
 
     def get_video_idx_path(self, folder: SPath, file_hash: str, video_name: SPathLike) -> SPath:
-        current_indxer = os.path.basename(self._bin_path)
-
         vid_name = SPath(video_name).stem
+        current_indxer = os.path.basename(self._bin_path)
         filename = '_'.join([file_hash, vid_name, current_indxer])
+
         return self.get_idx_file_path(folder / self.index_folder_name / filename)
 
     @inject_self

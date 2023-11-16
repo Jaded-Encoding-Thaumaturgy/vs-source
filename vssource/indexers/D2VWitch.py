@@ -37,7 +37,7 @@ class D2VWitch(DVDExtIndexer):
 
         str_filepaths = list(map(str, filepaths))
 
-        if "DGIndex" not in lines[0]:
+        if 'DGIndex' not in lines[0]:
             self.file_corrupted(index_path)
 
         if not (n_files := int(lines[1])) or n_files != len(str_filepaths):
@@ -62,7 +62,7 @@ class D2VWitch(DVDExtIndexer):
 
         head, lines = lines[:2], lines[2:]
 
-        if "DGIndex" not in head[0]:
+        if 'DGIndex' not in head[0]:
             self.file_corrupted(index_path)
 
         raw_header, lines = self._split_lines(self._split_lines(lines)[1])
@@ -95,12 +95,12 @@ class D2VWitch(DVDExtIndexer):
             elif key == 'FIELD_OPERATION':
                 header.field_op = int(values[0])
             elif key == 'FRAME_RATE':
-                if matches := re.search(r".*\((\d+\/\d+)", values[0]):
+                if matches := re.search(r'.*\((\d+\/\d+)', values[0]):
                     header.frame_rate = Fraction(matches.group(1))
             elif key == 'LOCATION':
                 header.location = list(map(partial(int, base=16), values))
 
-        frame_data = []
+        frame_data = list[D2VIndexFrameData]()
 
         if file_idx >= 0:
             for rawline in lines:
@@ -190,13 +190,13 @@ class D2VWitch(DVDExtIndexer):
 
             vobcell = (iframe.vob, iframe.cell)
 
-            progseq = int(((iframe.info & 0b1000000000) != 0))
+            progseq = int((iframe.info & 0b1000000000) != 0)
 
             for a in iframe.frameflags:
                 if a != 0xFF:
-                    frameflagslst += [a]
-                    vobidlst += [vobcell]
-                    progseqlst += [progseq]
+                    frameflagslst.append(a)
+                    vobidlst.append(vobcell)
+                    progseqlst.append(progseq)
 
         return frameflagslst, vobidlst, progseqlst
 
@@ -216,6 +216,6 @@ class D2VWitch(DVDExtIndexer):
                 vobidset[a][-1] = (last[0], last[1] + 1)
                 continue
 
-            vobidset[a] += [(i, i)]
+            vobidset[a].append((i, i))
 
         return vobidset

@@ -111,20 +111,20 @@ def to_json(ifo0: IFO0, vts: list[IFOX]) -> dict[str, list[dict[str, Any]]]:
 
     # ifo0
     i0 = dict[str, list[dict[str, Any]]]()
-    i0["tt_srpt"] = [asdict(a) for a in ifo0.tt_srpt]
-    i0["pgci_ut"] = []
-    i0["vts_c_adt"] = []
-    i0["vts_pgcit"] = []
-    i0["vts_ptt_srpt"] = []
+    i0['tt_srpt'] = [asdict(a) for a in ifo0.tt_srpt]
+    i0['pgci_ut'] = []
+    i0['vts_c_adt'] = []
+    i0['vts_pgcit'] = []
+    i0['vts_ptt_srpt'] = []
     jj = [asdict(a) for a in vts]
     for ad in jj:
-        cadt = ad["vts_c_adt"]
-        ad["vts_c_adt"] = cadt["cell_adr_table"]
-        ad["vts_pgcit"] = ad["vts_pgci"]["pgcs"]
-        del ad["vts_pgci"]
-        ad["pgci_ut"] = []
-        ad["tt_srpt"] = []
+        cadt = ad['vts_c_adt']
+        ad['vts_c_adt'] = cadt['cell_adr_table']
+        ad['vts_pgcit'] = ad['vts_pgci']['pgcs']
+        del ad['vts_pgci']
+        ad['pgci_ut'] = []
+        ad['tt_srpt'] = []
 
-    crnt["ifos"] = [i0] + jj
+    crnt['ifos'] = [i0, *jj]
 
     return crnt

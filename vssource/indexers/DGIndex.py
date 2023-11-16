@@ -21,20 +21,20 @@ class DGIndex(D2VWitch):
         self, files: list[SPath], output: SPath,
         idct_algo: int = 5, field_op: int = 2, yuv_to_rgb: int = 1
     ) -> list[str]:
-        is_linux = os.name != "nt"
+        is_linux = os.name != 'nt'
 
         if is_linux:
-            output = SPath("Z:\\" + str(output)[1:])
+            output = SPath(f'Z:\\{str(output)[1:]}')
             paths = list(subprocess.check_output(['winepath', '-w', f]).decode('utf-8').strip() for f in files)
         else:
             paths = list(map(str, files))
 
         for f in paths:
-            assert ' ' not in f, "DGIndex only supports paths without spaces in them!"
+            assert ' ' not in f, 'DGIndex only supports paths without spaces in them!'
 
         return list(map(str, [
             self._get_bin_path(),
-            "-IF=[" + ','.join([f'{p}' for p in paths]) + ']',
-            f"-IA={idct_algo}", f"-FO={field_op}", f"-YR={yuv_to_rgb}",
-            "-OM=0", f"-OF=[{output.with_suffix('')}]", "-HIDE", "-EXIT"
+            '-IF=[' + ','.join([f'{p}' for p in paths]) + ']',
+            f'-IA={idct_algo}', f'-FO={field_op}', f'-YR={yuv_to_rgb}',
+            '-OM=0', f'-OF=[{output.with_suffix("")}]', '-HIDE', '-EXIT'
         ]))

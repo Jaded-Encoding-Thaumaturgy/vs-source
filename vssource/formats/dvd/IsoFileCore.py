@@ -6,12 +6,13 @@ import os
 import warnings
 from abc import abstractmethod
 from fractions import Fraction
+from itertools import count
 from tempfile import gettempdir
 from typing import Sequence, cast
 
 from vstools import CustomValueError, DependencyNotFoundError, Region, SPath, SPathLike, core, vs
 
-from ...indexers import DVDSRCIndexer, DVDExtIndexer, ExternalIndexer
+from ...indexers import DVDExtIndexer, DVDSRCIndexer, ExternalIndexer
 from ...rff import apply_rff_video
 from ...utils import debug_print
 from .parsedvd import (
@@ -41,8 +42,7 @@ class IsoFileCore:
         """
         Only external indexer supported D2VWitch and DGIndex
 
-        If the indexer is None dvdsrc is used
-
+        If the indexer is None, dvdsrc is used
         """
         self.force_root = False
         self.output_folder = SPath(gettempdir())
@@ -98,9 +98,11 @@ class IsoFileCore:
     def get_vts(self, title_set_nr: int = 1, d2v_our_rff: bool = False) -> vs.VideoNode:
         """
         Gets a full vts.
-        only works with dvdsrc2 and d2vsource usese our rff for dvdsrc and d2source rff for d2vsource
+        Only works with dvdsrc2 and with d2vsource.
 
-        mainly useful for debugging and checking if our rff algorithm is good
+        It uses our rff for dvdsrc and d2source rff for d2vsource.
+
+        Mainly useful for debugging and checking if our rff algorithm is good.
         """
 
         if isinstance(self.indexer, DVDSRCIndexer) or d2v_our_rff:
@@ -120,29 +122,29 @@ class IsoFileCore:
 
         return apply_rff_video(rawnode, staff.rff, staff.tff, staff.prog, staff.progseq)
 
-    def get_title(self, title_nr: int = 1, angle_nr: int | None = None, rff_mode: int = 0) -> Title:
+    def get_title(self, title_idx: int = 1, angle_idx: int | None = None, rff_mode: int = 0) -> Title:
         """
         Gets a title.
 
-        :param title_nr:            title nr starting from 1
-        :param angle_nr:            starting from 1
-        :param rff_mode:            0 apply rff soft telecine (default)
-                                    1 calculate per frame durations based on rff
-                                    2 set average fps on global clip
+        :param title_idx:           Title index, 1-index based.
+        :param angle_idx:           Angle index, 1-index based.
+        :param rff_mode:            0 Apply rff soft telecine (default);
+                                    1 Calculate per frame durations based on rff;
+                                    2 Set average fps on global clip;
         """
-        # TODO: assert angle_nr range
+        # TODO: assert angle_idx range
         disable_rff = rff_mode >= 1
 
         tt_srpt = self.ifo0.tt_srpt
-        title_idx = title_nr - 1
+        title_idx -= 1
 
         if title_idx < 0 or title_idx >= len(tt_srpt):
-            raise CustomValueError('"title_nr" out of range', self.get_title)
+            raise CustomValueError('"title_idx" out of range', self.get_title)
 
         tt = tt_srpt[title_idx]
 
-        if tt.nr_of_angles != 1 and angle_nr is None:
-            raise CustomValueError('no angle_nr given for multi angle title', self.get_title)
+        if tt.nr_of_angles != 1 and angle_idx is None:
+            raise CustomValueError('No angle_idx given for multi angle title', self.get_title)
 
         target_vts = self.vts[tt.title_set_nr - 1]
         target_title = target_vts.vts_ptt_srpt[tt.vts_ttn - 1]
@@ -151,7 +153,7 @@ class IsoFileCore:
 
         for ptt in target_title[1:]:
             if ptt.pgcn != target_title[0].pgcn:
-                warnings.warn('title is not one program chain (untested currently)')
+                warnings.warn('Title is not one program chain (currently untested)')
 
         vobidcellids_to_take = list[tuple[int, int]]()
         is_chapter = list[bool]()
@@ -197,7 +199,7 @@ class IsoFileCore:
                     take_cell = True
                     angle_start_cell_i = cell_i
                 else:
-                    take_cell = current_angle == angle_nr
+                    take_cell = current_angle == angle_idx
 
                 if take_cell:
                     vobidcellids_to_take += [(cell_position.vob_id_nr, cell_position.cell_nr)]
@@ -248,7 +250,7 @@ class IsoFileCore:
                 absolutetime = absolute_time_from_timecode(timecodes)
 
         changes = [
-            *(i for i, (pvob, nvob) in enumerate(zip(vobids[:-1], vobids[1:]), start=1) if nvob != pvob), len(rnode) - 1
+            *(i for i, pvob, nvob in zip(count(1), vobids[:-1], vobids[1:]) if nvob != pvob), len(rnode) - 1
         ]
 
         assert len(changes) == len(is_chapter)
@@ -267,7 +269,7 @@ class IsoFileCore:
             else:
                 output_chapters.append(changes[last_chapter_i])
 
-        dvnavchapters = double_check_dvdnav(self.iso_path, title_nr)
+        dvnavchapters = double_check_dvdnav(self.iso_path, title_idx)
 
         if dvnavchapters is not None:  # and (rff_mode == 0 or rff_mode == 2):
             # ???????
@@ -276,9 +278,11 @@ class IsoFileCore:
 
             adjusted = [absolutetime[i] for i in output_chapters]  # [1:len(output_chapters)-1] ]
             if len(adjusted) != len(dvnavchapters):
-                warnings.warn(f'dvdnavchapters length do not match our chapters {len(adjusted)} {len(dvnavchapters)}'
-                              ' (open an issue in github)')
-                print(adjusted, "\n\n\n", dvnavchapters)
+                warnings.warn(
+                    'dvdnavchapters length do not match our chapters '
+                    f'{len(adjusted)} {len(dvnavchapters)} (open an issue in github)'
+                )
+                print(adjusted, '\n\n\n', dvnavchapters)
             else:
                 framelen = rfps.denominator / rfps.numerator
                 for i in range(len(adjusted)):
@@ -291,7 +295,7 @@ class IsoFileCore:
                             ' (open an issue in github)\n'
                             f' index: {i} {adjusted[i]}'
                         )
-                        print(adjusted, "\n\n\n", dvnavchapters)
+                        print(adjusted, '\n\n\n', dvnavchapters)
                         break
         else:
             debug_print("Skipping sanity check with dvdnav")
@@ -327,7 +331,7 @@ class IsoFileCore:
         durationcodesf = list(map(float, durationcodes))
 
         return Title(
-            rnode, output_chapters, changes, self, title_nr, tt.title_set_nr,
+            rnode, output_chapters, changes, self, title_idx, tt.title_set_nr,
             vobidcellids_to_take, dvdsrc_ranges, absolutetime, durationcodesf,
             audios, patched_end_chapter
         )
@@ -358,10 +362,10 @@ class IsoFileCore:
                 timestrings += [str(datetime.timedelta(seconds=chap_time))]
                 absolutestrings += [str(datetime.timedelta(seconds=current_time))]
 
-            to_print += f"Title: {i+1:02}\n"
-            to_print += f"length: {timestrings}\n"
-            to_print += f"end   : {absolutestrings}\n"
-            to_print += "\n"
+            to_print += f'Title: {i+1:02}\n'
+            to_print += f'length: {timestrings}\n'
+            to_print += f'end   : {absolutestrings}\n'
+            to_print += '\n'
 
         return to_print.strip()
 
@@ -447,12 +451,12 @@ class IsoFileCore:
 
             if ja != jb:
                 warnings.warn(
-                    f"libdvdread json does not match python implentation\n"
-                    f"json a,b have been written to {self.output_folder}"
+                    f'libdvdread json does not match python implentation\n'
+                    f'json a,b have been written to {self.output_folder}'
                 )
 
                 for k, v in [('a', ja), ('b', jb)]:
                     with open(os.path.join(self.output_folder, f'{k}.json'), 'wt') as file:
                         file.write(v)
         else:
-            debug_print("We don't have dvdsrc and can't double check the json output with libdvdread.")
+            debug_print('We don\'t have dvdsrc and can\'t double check the json output with libdvdread.')

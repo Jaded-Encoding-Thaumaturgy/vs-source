@@ -23,10 +23,10 @@ def apply_rff_array(old_array: Sequence[T], rff: Sequence[int], tff: Sequence[in
 
     assert (len(array_double_rate) % 2) == 0
 
-    for f1, f2 in zip(array_double_rate[::2], array_double_rate[1::2]):
+    for i, f1, f2 in zip(count(), array_double_rate[::2], array_double_rate[1::2]):
         if f1 != f2:
             warnings.warn(
-                f'Ambiguous pattern due to rff {f1}!={f2}\n'
+                f'Ambiguous pattern due to rff {f1}!={f2} on index {i}\n'
                 'This probably just means telecine happened across chapters boundary.'
             )
 
@@ -63,22 +63,24 @@ def apply_rff_video(
         else:
             assert current_prg
 
-            cnt = 1
+            field_count = 1
             if current_rff:
-                cnt += 1 + int(current_tff)
+                field_count += 1 + int(current_tff)
 
-            fields += [{'n': 2 * i, 'tf': 1, 'prg': True, 'repeat': False},
-                       {'n': 2 * i + 1, 'tf': 0, 'prg': True, 'repeat': False}] * cnt
+            fields += [
+                {'n': 2 * i, 'tf': 1, 'prg': True, 'repeat': False},
+                {'n': 2 * i + 1, 'tf': 0, 'prg': True, 'repeat': False}
+            ] * field_count
 
     # TODO: mark known progressive frames as progressive
 
     assert (len(fields) % 2) == 0
 
-    for a, (tf, bf) in enumerate(zip(fields[::2], fields[1::2])):
+    for a, tf, bf in zip(count(), fields[::2], fields[1::2]):
         if tf['tf'] == bf['tf']:
             bf['tf'] = not bf['tf']
 
-            warnings.warn(f'Invalid field transition @{a}')
+            warnings.warn(f'Invalid field transition at {a}')
 
     for fcurr, fnext in zip(fields[::2], fields[1::2]):
         if fcurr['tf'] == fnext['tf']:
