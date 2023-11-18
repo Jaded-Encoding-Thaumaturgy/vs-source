@@ -64,6 +64,8 @@ class PGC:
 
 @dataclass
 class VTSPgci:
+    pgcs: list[PGC]
+
     def __init__(self, reader: SectorReadHelper):
         reader._goto_sector_ptr(0x00CC)
 

@@ -269,7 +269,7 @@ class IsoFileCore:
             else:
                 output_chapters.append(changes[last_chapter_i])
 
-        dvnavchapters = double_check_dvdnav(self.iso_path, title_idx)
+        dvnavchapters = double_check_dvdnav(self.iso_path, title_idx + 1)
 
         if dvnavchapters is not None:  # and (rff_mode == 0 or rff_mode == 2):
             # ???????

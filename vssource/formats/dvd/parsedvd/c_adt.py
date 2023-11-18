@@ -20,6 +20,9 @@ class CellAdr:
 
 @dataclass
 class CADT:
+    vob_count: int
+    cell_adr_table: list[CellAdr]
+
     def __init__(self, reader: SectorReadHelper):
         reader._goto_sector_ptr(0x00E0)
         self.vob_count, _, end = reader._unpack_byte(2, 2, 4)

@@ -33,6 +33,9 @@ class AudioAttr:
 
 @dataclass
 class VTSIMat:
+    vts_video_attr: VTSVideoAttr
+    vts_audio_attr: list[AudioAttr]
+
     def __init__(self, reader: SectorReadHelper):
         vb0, vb1, = reader._seek_unpack_byte(0x0200, 1, 1)
 
