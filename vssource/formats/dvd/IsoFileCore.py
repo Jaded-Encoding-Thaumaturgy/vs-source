@@ -122,29 +122,29 @@ class IsoFileCore:
 
         return apply_rff_video(rawnode, staff.rff, staff.tff, staff.prog, staff.progseq)
 
-    def get_title(self, title_idx: int = 1, angle_idx: int | None = None, rff_mode: int = 0) -> Title:
+    def get_title(self, title_nr: int = 1, angle_nr: int | None = None, rff_mode: int = 0) -> Title:
         """
         Gets a title.
 
-        :param title_idx:           Title index, 1-index based.
-        :param angle_idx:           Angle index, 1-index based.
+        :param title_nr:            Title index, 1-index based.
+        :param angle_nr:            Angle index, 1-index based.
         :param rff_mode:            0 Apply rff soft telecine (default);
                                     1 Calculate per frame durations based on rff;
                                     2 Set average fps on global clip;
         """
-        # TODO: assert angle_idx range
+        # TODO: assert angle_nr range
         disable_rff = rff_mode >= 1
 
         tt_srpt = self.ifo0.tt_srpt
-        title_idx -= 1
+        title_idx = title_nr - 1
 
         if title_idx < 0 or title_idx >= len(tt_srpt):
             raise CustomValueError('"title_idx" out of range', self.get_title)
 
         tt = tt_srpt[title_idx]
 
-        if tt.nr_of_angles != 1 and angle_idx is None:
-            raise CustomValueError('No angle_idx given for multi angle title', self.get_title)
+        if tt.nr_of_angles != 1 and angle_nr is None:
+            raise CustomValueError('No angle_nr given for multi angle title', self.get_title)
 
         target_vts = self.vts[tt.title_set_nr - 1]
         target_title = target_vts.vts_ptt_srpt[tt.vts_ttn - 1]
@@ -199,7 +199,7 @@ class IsoFileCore:
                     take_cell = True
                     angle_start_cell_i = cell_i
                 else:
-                    take_cell = current_angle == angle_idx
+                    take_cell = current_angle == angle_nr
 
                 if take_cell:
                     vobidcellids_to_take += [(cell_position.vob_id_nr, cell_position.cell_nr)]
@@ -250,7 +250,7 @@ class IsoFileCore:
                 absolutetime = absolute_time_from_timecode(timecodes)
 
         changes = [
-            *(i for i, pvob, nvob in zip(count(1), vobids[:-1], vobids[1:]) if nvob != pvob), len(rnode) - 1
+            *(i for i, pvob, nvob in zip(count(1), vobids[:-1], vobids[1:]) if nvob != pvob), len(rnode)
         ]
 
         assert len(changes) == len(is_chapter)
@@ -276,7 +276,7 @@ class IsoFileCore:
             if rfps.denominator == 1001:
                 dvnavchapters = [a * 1.001 for a in dvnavchapters]
 
-            adjusted = [absolutetime[i] for i in output_chapters]  # [1:len(output_chapters)-1] ]
+            adjusted = [absolutetime[i] if i != len(absolutetime) else absolutetime[i-1] + durationcodes[i-1]  for i in output_chapters]  # [1:len(output_chapters)-1] ]
             if len(adjusted) != len(dvnavchapters):
                 warnings.warn(
                     'dvdnavchapters length do not match our chapters '
@@ -307,7 +307,7 @@ class IsoFileCore:
         # you could either always add the end as chapter or stretch the last chapter till the end
         output_chapters = [0] + output_chapters
 
-        lastframe = len(rnode) - 1
+        lastframe = len(rnode)
         if output_chapters[-1] != lastframe:
             patched_end_chapter = output_chapters[-1]
             output_chapters[-1] = lastframe
