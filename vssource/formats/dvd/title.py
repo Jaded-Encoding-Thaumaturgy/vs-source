@@ -115,8 +115,12 @@ class TitleAudios(vs_object, list[vs.AudioNode]):
 
         start, end = int(strt), int(endd)
 
-        self.cache[i] = anode = anode[start:len(anode) - end]
-
+        if start >= 0:
+            anode = anode[start:len(anode) - end]
+        else:
+            anode = vs.core.std.BlankAudio(anode,length=-start) + anode[:len(anode) - end]
+            
+        self.cache[i] = anode
         total_dura = (self.title._absolute_time[-1] + self.title._duration_times[-1])
         delta = abs(total_dura - anode.num_samples / anode.sample_rate) * 1000
 
@@ -401,18 +405,22 @@ class SplitHelper:
         f = title.chapters[f]
         t = title.chapters[t]
         assert f >= 0
-        assert t <= len(vnode) - 1
+        assert t <= len(vnode)
         assert f <= t
         return vnode[f:t]
 
     @staticmethod
     def _cut_fz_a(title: Title, anode: vs.AudioNode, start: int, end: int) -> vs.AudioNode:
         chapter_idxs = [title.chapters[i] for i in (start, end)]
-        timecodes = [title._absolute_time[i] for i in chapter_idxs]
+        timecodes = [title._absolute_time[i] if i != len(title._absolute_time) else title._absolute_time[i-1] + title._duration_times[i-1] for i in chapter_idxs]
 
         samples_start, samples_end, *_ = [
             min(round(i * anode.sample_rate), anode.num_samples)
             for i in timecodes
         ]
 
-        return anode[samples_start:samples_end]
+        if samples_start == samples_end:
+            #???????
+            return anode.std.BlankAudio(length=1)
+        else:
+            return anode[samples_start:samples_end]
