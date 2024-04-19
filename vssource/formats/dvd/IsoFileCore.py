@@ -278,7 +278,7 @@ class IsoFileCore:
                 dvnavchapters = [a * 1.001 for a in dvnavchapters]
 
             adjusted = [absolutetime[i] if i != len(
-                absolutetime) else absolutetime[i - 1] + durationcodes[i - 1] for i in output_chapters]  # [1:len(output_chapters)-1] ]
+                absolutetime) else absolutetime[i - 1] + durationcodes[i - 1] for i in output_chapters]
             if len(adjusted) != len(dvnavchapters):
                 warnings.warn(
                     'dvdnavchapters length do not match our chapters '

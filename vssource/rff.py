@@ -23,7 +23,7 @@ def apply_rff_array(old_array: Sequence[T], rff: Sequence[int], tff: Sequence[in
 
     # assert (len(array_double_rate) % 2) == 0
     if (len(array_double_rate) % 2) != 0:
-        warnings.warn(f'uneven amount of fields removing last\n')
+        warnings.warn('uneven amount of fields removing last\n')
         array_double_rate = array_double_rate[:-1]
 
     # It seems really weird thats its allowed to have rff stuff across
@@ -81,7 +81,7 @@ def apply_rff_video(
 
     # assert (len(fields) % 2) == 0
     if (len(fields) % 2) != 0:
-        warnings.warn(f'uneven amount of fields removing last\n')
+        warnings.warn('uneven amount of fields removing last\n')
         fields = fields[:-1]
 
     for a, tf, bf in zip(count(), fields[::2], fields[1::2]):

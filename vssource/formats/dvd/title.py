@@ -182,7 +182,7 @@ class Title:
             if a <= last_chpt:
                 raise CustomValueError(f'Chapter must be monotonly increasing {a} before {last_chpt}', self.split_at)
             if a > len(self.video):
-                raise CustomValueError(f'Chapter must not be higher than video length', self.split_at)
+                raise CustomValueError('Chapter must not be higher than video length', self.split_at)
             last_chpt = a
         output_cnt = SplitHelper._sanitize_splits(self, splits)
         video = SplitHelper.split_video(self, splits)
