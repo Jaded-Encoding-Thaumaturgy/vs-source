@@ -39,9 +39,11 @@ class VTSIMat:
     def __init__(self, reader: SectorReadHelper):
         vb0, vb1, = reader._seek_unpack_byte(0x0200, 1, 1)
 
+        # beware http://www.mpucoder.com/DVD/ifo.html#vidatt
+        # does not match libdvdread picture_size is at different position
         mpeg_version = (vb0 & 0b11000000) >> 6
         video_format = (vb0 & 0b00110000) >> 4
-        picture_size = (vb1 & 0b00110000) >> 4
+        picture_size = (vb1 & 0b00001100) >> 2
 
         self.vts_video_attr = VTSVideoAttr(mpeg_version, video_format, picture_size)
         self.vts_audio_attr = list[AudioAttr]()
