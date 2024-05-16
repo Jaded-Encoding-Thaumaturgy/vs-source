@@ -368,7 +368,7 @@ class IsoFileCore:
                 current_time += chap_time
                 seconds += [chap_time]
                 vobids += [(vobid.vob_id_nr, vobid.cell_nr)]
-            to_print += f'Title: {i+1:02}\n'
+            to_print += f'Title: {i + 1:02}\n'
             lastv = None
 
             crnt = 0
@@ -385,7 +385,7 @@ class IsoFileCore:
                 end = str(datetime.timedelta(seconds=crnt + seconds[i]))
                 dur = str(datetime.timedelta(seconds=seconds[i]))
 
-                to_print += f"  {i+1:02} {v} start={sta_g} local={sta} end={end} duration={dur}\n"
+                to_print += f"  {i + 1:02} {v} start={sta_g} local={sta} end={end} duration={dur}\n"
                 crnt += seconds[i]
                 crnt_glbl += seconds[i]
 
