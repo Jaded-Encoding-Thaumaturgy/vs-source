@@ -19,7 +19,7 @@ __all__ = [
 
 def parse_video_filepath(filepath: SPathLike | Sequence[SPathLike]) -> tuple[SPath, ParsedFile]:
     filepath = next(iter(Indexer.normalize_filenames(filepath)))
-    check_perms(filepath, 'r', func=source)
+    check_perms(filepath, 'r', strict=True, func=source)
 
     file = FileType.parse(filepath) if filepath.exists() else None
 
@@ -32,7 +32,7 @@ def parse_video_filepath(filepath: SPathLike | Sequence[SPathLike]) -> tuple[SPa
                 file = FileType.parse(newpath)
 
     if not file or not _check_file_type(FileType(file.file_type)):
-        raise FileTypeMismatchError('File isn\'t a video or image file!', source)
+        raise FileTypeMismatchError('The file "{file}" isn\'t a video or image file!', source, file=filepath)
 
     return filepath, file
 
