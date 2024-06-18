@@ -4,9 +4,9 @@ from functools import partial
 from typing import Any, Literal, Protocol, Sequence, overload
 
 from vstools import (
-    ChromaLocationT, ColorRangeT, CustomRuntimeError, FieldBasedT, FileType, FileTypeMismatchError, IndexingType,
-    MatrixT, ParsedFile, PrimariesT, SPath, SPathLike, TransferT, check_perms, copy_signature, initialize_clip,
-    match_clip, to_arr, vs
+    ChromaLocationT, ColorRangeT, CustomRuntimeError, FieldBasedT, FileType, FileNotExistsError, FileTypeMismatchError,
+    IndexingType, MatrixT, ParsedFile, PrimariesT, SPath, SPathLike, TransferT, check_perms, copy_signature,
+    initialize_clip, match_clip, to_arr, vs
 )
 
 from .indexers import IMWRI, LSMAS, BestSource, D2VWitch, DGIndex, DGIndexNV, Indexer
@@ -19,6 +19,10 @@ __all__ = [
 
 def parse_video_filepath(filepath: SPathLike | Sequence[SPathLike]) -> tuple[SPath, ParsedFile]:
     filepath = next(iter(Indexer.normalize_filenames(filepath)))
+
+    if not filepath.exists():
+        raise FileNotExistsError(f'The file, \"{filepath}\", could not be found!', source)
+
     check_perms(filepath, 'r', func=source)
 
     file = FileType.parse(filepath) if filepath.exists() else None
@@ -32,7 +36,7 @@ def parse_video_filepath(filepath: SPathLike | Sequence[SPathLike]) -> tuple[SPa
                 file = FileType.parse(newpath)
 
     if not file or not _check_file_type(FileType(file.file_type)):
-        raise FileTypeMismatchError('File isn\'t a video or image file!', source)
+        raise FileTypeMismatchError(f'The file, \"{filepath}\", is not a video or image file!', source)
 
     return filepath, file
 
