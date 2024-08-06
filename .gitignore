@@ -130,4 +130,4 @@ dmypy.json
 
 test*.py
 sometests/
-.vspreview
+.vsjet

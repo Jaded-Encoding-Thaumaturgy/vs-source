@@ -10,14 +10,17 @@ from os import name as os_name
 from typing import TYPE_CHECKING, Any, Callable, ClassVar, Iterable, Literal, Protocol, Sequence
 
 from vstools import (
-    MISSING, ChromaLocationT, ColorRangeT, CustomRuntimeError, DataType, FieldBasedT, MatrixT, MissingT, PrimariesT,
-    SPath, SPathLike, TransferT, core, initialize_clip, inject_self, to_arr, vs
+    MISSING, ChromaLocationT, ColorRangeT, CustomRuntimeError, DataType, FieldBasedT, MatrixT, MissingT, PackageStorage,
+    PrimariesT, SPath, SPathLike, TransferT, core, initialize_clip, inject_self, to_arr, vs
 )
 
 from ..dataclasses import IndexFileType
 
 if TYPE_CHECKING:
     from ..formats.dvd.parsedvd import IFOX, IFO0Title
+
+
+PackageStorage()
 
 
 __all__ = [
@@ -35,8 +38,6 @@ class VSSourceFunc(Protocol):
 
 class Indexer(ABC):
     """Abstract indexer interface."""
-
-    index_folder_name = '.vssource'
 
     _source_func: ClassVar[Callable[..., vs.VideoNode]]
 
@@ -255,7 +256,7 @@ class ExternalIndexer(Indexer):
         current_indxer = os.path.basename(self._bin_path)
         filename = '_'.join([file_hash, vid_name, current_indxer])
 
-        return self.get_idx_file_path(folder / self.index_folder_name / filename)
+        return self.get_idx_file_path(PackageStorage(folder).get_file(filename))
 
     @inject_self
     def source(  # type: ignore
