@@ -9,7 +9,9 @@ __all__ = [
 
     'IMWRI',
 
-    'LSMAS'
+    'LSMAS',
+    
+    'CarefulSource'
 ]
 
 
@@ -23,3 +25,7 @@ class IMWRI(Indexer):
 
 class LSMAS(Indexer):
     _source_func = core.lazy.lsmas.LWLibavSource
+
+
+class CarefulSource(Indexer):
+    _source_func = core.lazy.cs.ImageSource
