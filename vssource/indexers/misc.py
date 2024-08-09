@@ -9,7 +9,9 @@ __all__ = [
 
     'IMWRI',
 
-    'LSMAS'
+    'LSMAS',
+    
+    'CarefulSource'
 ]
 
 
