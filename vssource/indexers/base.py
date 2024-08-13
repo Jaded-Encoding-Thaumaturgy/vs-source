@@ -111,7 +111,7 @@ class Indexer(ABC):
         **kwargs: Any
     ) -> vs.VideoNode:
         return self._source(
-            [self.source_func(f.to_str(), **kwargs) for f in self.normalize_filenames(file)],
+            [self.source_func(f.to_str(), **self.indexer_kwargs | kwargs) for f in self.normalize_filenames(file)],
             bits, matrix, transfer, primaries, chroma_location, color_range, field_based
         )
 
