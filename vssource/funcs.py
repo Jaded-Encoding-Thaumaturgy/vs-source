@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Any, Literal, Protocol, Sequence, overload
+from typing import Any, Literal, Generator, Protocol, Sequence, overload
 
 from vstools import (
     ChromaLocationT, ColorRangeT, CustomRuntimeError, FieldBasedT, FileType, FileTypeMismatchError, IndexingType,
@@ -17,8 +17,17 @@ __all__ = [
 ]
 
 
-def parse_video_filepath(filepath: SPathLike | Sequence[SPathLike]) -> tuple[SPath, ParsedFile]:
-    filepath = next(iter(Indexer.normalize_filenames(filepath)))
+def parse_video_filepath(
+    filepath: SPathLike | Sequence[SPathLike] | Generator[SPath, None, None]
+) -> tuple[SPath, ParsedFile]:
+    if isinstance(filepath, Generator):
+        filepath = list(filepath)
+
+    try:
+        filepath = next(iter(Indexer.normalize_filenames(filepath)))
+    except StopIteration:
+        raise CustomRuntimeError('No files provided!', source, filepath)
+
     check_perms(filepath, 'r', strict=True, func=source)
 
     file = FileType.parse(filepath) if filepath.exists() else None
@@ -100,7 +109,7 @@ _source_func: source_func = ...  # type: ignore
 
 @copy_signature(_source_func)
 def source(
-    filepath: SPathLike | Sequence[SPathLike] | None = None,
+    filepath: SPathLike | Sequence[SPathLike] | Generator[SPathLike, None, None] | None = None,
     bits: int | None = None, *,
     matrix: MatrixT | None = None,
     transfer: TransferT | None = None,
