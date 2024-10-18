@@ -204,12 +204,12 @@ def source(
                     continue
 
                 try:
-                    clip = indexerr.source(filepath)
+                    clip = indexerr.source(filepath, bits=bits)
                     break
                 except Exception as e:
                     if 'bgr0 is not supported' in str(e):
                         try:
-                            clip = indexerr.source(filepath, format='rgb24')
+                            clip = indexerr.source(filepath, format='rgb24', bits=bits)
                             break
                         except Exception:
                             ...
