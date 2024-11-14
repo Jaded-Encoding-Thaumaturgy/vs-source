@@ -11,7 +11,9 @@ __all__ = [
 
     'LSMAS',
 
-    'CarefulSource'
+    'CarefulSource',
+
+    'FFMS2'
 ]
 
 
@@ -29,3 +31,7 @@ class LSMAS(Indexer):
 
 class CarefulSource(Indexer):
     _source_func = core.lazy.cs.ImageSource
+
+
+class FFMS2(Indexer):
+    _source_func = core.lazy.ffms2.Source
