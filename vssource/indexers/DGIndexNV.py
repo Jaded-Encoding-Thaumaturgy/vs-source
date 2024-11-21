@@ -25,7 +25,7 @@ class DGIndexNV(ExternalIndexer):
         return list(
             map(str, [
                 self._get_bin_path(), '-i',
-                ','.join(str(path) for path in files),
+                ','.join(str(path.absolute()) for path in files),
                 '-h', '-o', output, '-e'
             ])
         )
