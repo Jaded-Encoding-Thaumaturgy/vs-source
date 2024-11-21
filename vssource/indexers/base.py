@@ -237,24 +237,25 @@ class ExternalIndexer(Indexer):
                     output.unlink()
                 else:
                     return self.update_video_filenames(output, files)
+
             return self._run_index(files, output, cmd_args)
 
         if not split_files:
-            output = self.get_video_idx_path(dest_folder, hash_str, 'JOINED' if len(files) > 1 else 'SINGLE')
+            output = self.get_video_idx_path(files[0], dest_folder, hash_str, 'JOINED' if len(files) > 1 else 'SINGLE')
             _index(files, output)
             return [output]
 
-        outputs = [self.get_video_idx_path(dest_folder, hash_str, file.name) for file in files]
+        outputs = [self.get_video_idx_path(file, dest_folder, hash_str, file.name) for file in files]
 
         for file, output in zip(files, outputs):
             _index([file], output)
 
         return outputs
 
-    def get_video_idx_path(self, folder: SPath, file_hash: str, video_name: SPathLike) -> SPath:
+    def get_video_idx_path(self, file_name: SPath, folder: SPath, file_hash: str, video_name: SPathLike) -> SPath:
         vid_name = SPath(video_name).stem
         current_indxer = os.path.basename(self._bin_path)
-        filename = '_'.join([file_hash, vid_name, current_indxer])
+        filename = '_'.join([file_name.stem, file_hash, vid_name, current_indxer])
 
         return self.get_idx_file_path(PackageStorage(folder).get_file(filename))
 
