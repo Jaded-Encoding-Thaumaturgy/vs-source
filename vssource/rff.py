@@ -28,14 +28,15 @@ def apply_rff_array(old_array: Sequence[T], rff: Sequence[int], tff: Sequence[in
 
     # It seems really weird thats its allowed to have rff stuff across
     # vob boundries even for multi angle stuff i have seen this so often though it is ok to remove the warnings
-    # for i, f1, f2 in zip(count(), array_double_rate[::2], array_double_rate[1::2]):
-    #    if f1 != f2:
-    #        warnings.warn(
-    #            f'Ambiguous pattern due to rff {f1}!={f2} on index {i}\n'
-    #            'This probably just means telecine happened across chapters boundary.'
-    #        )
+    for i, f1, f2 in zip(count(), array_double_rate[::2], array_double_rate[1::2]):
+        if f1 != f2:
+            warnings.warn(
+                f'Ambiguous pattern due to rff {f1}!={f2} on index {i}\n'
+            )
 
-    return array_double_rate[::2]
+    # 1::2 because there might be the case where there is a one frame cell at the end and if we cut off the last field
+    # we will miss that vobid with 0::2
+    return array_double_rate[1::2]
 
 
 def apply_rff_video(
