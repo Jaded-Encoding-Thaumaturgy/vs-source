@@ -9,7 +9,7 @@ from vstools import (
     match_clip, to_arr, vs
 )
 
-from .indexers import IMWRI, LSMAS, BestSource, D2VWitch, DGIndex, DGIndexNV, Indexer
+from .indexers import FFMS2, IMWRI, LSMAS, BestSource, D2VWitch, DGIndex, DGIndexNV, Indexer
 
 __all__ = [
     'parse_video_filepath',
@@ -130,23 +130,31 @@ def source(
         )
 
     clip = None
-    film_thr = float(min(100, film_thr))
 
     filepath, file = parse_video_filepath(filepath)
 
+    indexer_kwargs = dict[str, Any]()
     props = dict[str, Any]()
 
     to_skip = to_arr(kwargs.get('_to_skip', []))
 
     if file.ext is IndexingType.LWI:
         clip = LSMAS.source_func(filepath, **kwargs)
+    elif file.ext is IndexingType.DGI:
+        idx_info = DGIndexNV().get_info(filepath, 0).footer
+
+        if idx_info.film >= film_thr:
+            indexer_kwargs |= dict(fieldop=1)
+            props |= dict(DgiFieldOp=1, _FieldBased=0)
+
+        clip = DGIndexNV().source_func(filepath, **(kwargs | indexer_kwargs))
+
+        props |= dict(DgiFieldOp=0, DgiOrder=idx_info.order, DgiFilm=idx_info.film)
     elif file.file_type is FileType.IMAGE:
         clip = IMWRI.source_func(filepath, **kwargs)
     else:
-        try:
-            if DGIndexNV in to_skip:
-                raise RuntimeError
 
+        try:
             try:
                 from pymediainfo import MediaInfo  # type: ignore
             except ImportError:
@@ -169,23 +177,17 @@ def source(
                         if bitdepth is not None and video_fmt == 'avc' and int(bitdepth) > 8:
                             raise RuntimeError
 
-            indexer, filepath_dgi = DGIndexNV(), SPath(filepath)
-
-            if filepath_dgi.suffix != '.dgi':
-                filepath_dgi = next(iter(indexer.index([filepath_dgi], False, False)))
-
-            idx_info = indexer.get_info(filepath_dgi, 0).footer
-
-            props |= dict(DgiFieldOp=0, DgiOrder=idx_info.order, DgiFilm=idx_info.film)
-
-            indexer_kwargs = dict[str, Any]()
-            if idx_info.film >= film_thr:
-                indexer_kwargs |= dict(fieldop=1)
-                props |= dict(DgiFieldOp=1, _FieldBased=0)
+            indexer, filepath_dgi = FFMS2 if FFMS2().version[0] >= 5 else BestSource(), SPath(filepath)
 
             clip = indexer.source_func(filepath_dgi, **indexer_kwargs)
         except (RuntimeError, AttributeError, FileNotFoundError):
-            indexers = list[type[Indexer]]([LSMAS, D2VWitch, DGIndex])
+            indexers = list[type[Indexer]]([D2VWitch, DGIndex])
+
+            # FFMS2 is preferred over LSMAS, but only major version 5>=.
+            if FFMS2().version[0] >= 5:
+                indexers.insert(0, FFMS2)
+            else:
+                indexers.insert(0, LSMAS)
 
             try:
                 from vspreview import is_preview
