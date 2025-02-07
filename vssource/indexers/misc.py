@@ -45,3 +45,10 @@ class FFMS2(Indexer):
     """FFmpegSource2 indexer"""
 
     _source_func = core.lazy.ffms2.Source
+
+    @property
+    def version(self) -> tuple[int, int, int, int]:
+        try:
+            return tuple(int(v) for v in core.lazy.ffms2.Version().split('.'))
+        except AttributeError:
+            return (-1, -1, -1, -1)
