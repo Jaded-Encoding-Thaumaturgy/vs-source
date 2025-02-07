@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from fractions import Fraction
 from functools import lru_cache
-from typing import Sequence
+from typing import Any, Sequence
 
 from vstools import SPath, core
 
@@ -15,13 +15,27 @@ __all__ = [
     'DGIndexNV'
 ]
 
-
 class DGIndexNV(ExternalIndexer):
     _bin_path = 'DGIndexNV'
     _ext = 'dgi'
     _source_func = core.lazy.dgdecodenv.DGSource
 
+    def __init__(self, **kwargs: Any) -> None:
+        import warnings
+
+        # Would prefer to do a version check, but I don't think it uses proper versioning...
+        warnings.filterwarnings('always', category=DeprecationWarning)  # why does it require this now...?
+
+        warnings.warn(
+            f'{self.__class__.__name__}: This source filter is deprecated due to a number of regressions '
+            'in recent versions and will be removed in a future release. Use FFMS2 or BestSource instead.',
+            DeprecationWarning,
+        )
+
+        super().__init__(**kwargs)
+
     def get_cmd(self, files: list[SPath], output: SPath) -> list[str]:
+
         return list(
             map(str, [
                 self._get_bin_path(), '-i',
