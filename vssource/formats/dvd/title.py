@@ -262,14 +262,13 @@ class Title:
             raise CustomValueError(f'Audio at {audio_i} is not ac3', self.dump_ac3)
 
         nd = vs.core.dvdsrc2.RawAc3(str(self._core.iso_path), self._vts, audio_i, self._dvdsrc_ranges)
-        p0 = nd.get_frame(0).props
 
         if not only_calc_delay:
             with open(a, 'wb') as wrt:
                 for f in nd.frames():
                     wrt.write(bytes(f[0]))
 
-        return float(get_prop(p0, 'Stuff_Start_PTS', int)) / PCR_CLOCK
+        return float(get_prop(nd, 'Stuff_Start_PTS', int)) / PCR_CLOCK
 
     def __repr__(self) -> str:
         chapters = [*self.chapters]
@@ -307,9 +306,8 @@ class SplitHelper:
     @staticmethod
     def split_range_ac3(title: Title, f: int, t: int, audio_i: int, outfile: str) -> float:
         nd = vs.core.dvdsrc2.RawAc3(str(title._core.iso_path), title._vts, audio_i, title._dvdsrc_ranges)
-        prps = nd.get_frame(0).props
 
-        start, end = (get_prop(prps, f'Stuff_{x}_PTS', int) for x in ('Start', 'End'))
+        start, end = (get_prop(nd, f'Stuff_{x}_PTS', int) for x in ('Start', 'End'))
 
         debug_print(f'Stuff_Start_PTS pts {start} Stuff_End_PTS {end}')
 
@@ -328,7 +326,7 @@ class SplitHelper:
 
             debug_print('first ', start, len(nd))
 
-            for i in range(start, len(nd)):
+            for i, frame in enumerate(nd.frames(close=True)):
                 pkt_start_pts = i * AC3_FRAME_LENGTH
                 pkt_end_pts = (i + 1) * AC3_FRAME_LENGTH
 
@@ -337,7 +335,7 @@ class SplitHelper:
                 if pkt_start_pts < start_pts:
                     audio_offset_pts = start_pts - pkt_start_pts
 
-                outf.write(bytes(nd.get_frame(i)[0]))
+                outf.write(bytes(frame[0]))
 
                 if pkt_end_pts > end_pts:
                     break
