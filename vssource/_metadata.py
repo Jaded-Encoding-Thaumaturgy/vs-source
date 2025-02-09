@@ -1,6 +1,6 @@
 """Vapoursynth Wrapper for indexing and similar."""
 
-__version__ = '0.11.2'
+__version__ = '0.12.0'
 
 __author__ = 'Setsugen no ao <setsugen@setsugen.dev>'
 __maintainer__ = __author__
