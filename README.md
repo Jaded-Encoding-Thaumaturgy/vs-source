@@ -1,5 +1,9 @@
 # vs-source
 
+> [!CAUTION]
+> This package is deprecated!
+> Please use https://github.com/Jaded-Encoding-Thaumaturgy/vs-jetpack instead.
+
 ## DVDs were a mistake, but it doesn't have to feel _that_ bad to work with them
 
 <br>
@@ -9,18 +13,9 @@ A wrapper for DVD file structure and ISO files.
 For support you can check out the [JET Discord server](https://discord.gg/XTpc6Fa9eB). <br><br> <br><br>
 
 ## How to install
+**This package is deprecated!**
 
-Install `vssource` with the following command:
-
-```sh
-pip install vssource
-```
-
-Or if you want the latest git version, install it with this command:
-
-```sh
-pip install git+https://github.com/Jaded-Encoding-Thaumaturgy/vs-source.git
-```
+Please install https://pypi.org/p/vsjetpack instead.
 
 <br>
 One of the following plugins is required:
