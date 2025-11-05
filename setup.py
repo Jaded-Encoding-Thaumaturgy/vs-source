@@ -27,7 +27,8 @@ setuptools.setup(
     },
     install_requires=requirements,
     python_requires='>=3.12',
-    packages=setuptools.find_packages(),
+    # packages=setuptools.find_packages(),
+    packages=[],
     package_data={
         package_name: ['py.typed']
     },
